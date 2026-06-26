@@ -2,7 +2,7 @@
 #include <TFT_eSPI.h>
 #include <stdint.h>
 
-#define NUM_PAGES   3
+#define NUM_PAGES   4
 #define DOTS_BAR_Y  298   // first pixel row of the dots/version bar
 #define DOTS_BAR_H  22    // height of the dots/version bar
 
@@ -26,4 +26,6 @@ public:
     virtual void tick()                       {}
     virtual void onTap(int16_t x, int16_t y) {}
     virtual void onLeave()                    {}
+    // When true, horizontal swipes are passed to onTap instead of changing page.
+    virtual bool interceptsSwipe()            { return false; }
 };

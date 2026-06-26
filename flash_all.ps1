@@ -27,28 +27,63 @@ foreach ($f in $artifacts) {
     if (Test-Path "$src\$f") { Copy-Item "$src\$f" $dst -Force }
 }
 
-# Upload to both devices in parallel
-Write-Host "`nUploading to COM16 and COM17 in parallel..." -ForegroundColor Cyan
+# Check which devices are present
+$availablePorts = [System.IO.Ports.SerialPort]::GetPortNames()
+$device1Present = $availablePorts -contains "COM16"
+$device2Present = $availablePorts -contains "COM17"
 
-$j1 = Start-Job -ScriptBlock {
-    Set-Location $using:root
-    & $using:pio run -e device1 --target upload 2>&1
-    if ($using:IncludeFS) { & $using:pio run -e device1 --target uploadfs 2>&1 }
+if (-not $device1Present) { Write-Host "COM16 not found — skipping device1." -ForegroundColor Yellow }
+if (-not $device2Present) { Write-Host "COM17 not found — skipping device2." -ForegroundColor Yellow }
+
+if (-not $device1Present -and -not $device2Present) {
+    Write-Host "No devices found. Nothing to flash." -ForegroundColor Red
+    exit 1
 }
-$j2 = Start-Job -ScriptBlock {
-    Set-Location $using:root
-    & $using:pio run -e device2 --target upload 2>&1
-    if ($using:IncludeFS) { & $using:pio run -e device2 --target uploadfs 2>&1 }
+
+Write-Host "`nUploading to available devices in parallel..." -ForegroundColor Cyan
+
+$jobs = @()
+
+if ($device1Present) {
+    $jobs += Start-Job -ScriptBlock {
+        Set-Location $using:root
+        & $using:pio run -e device1 --target upload 2>&1
+        if ($using:IncludeFS) { & $using:pio run -e device1 --target uploadfs 2>&1 }
+    }
+} else {
+    $jobs += $null
 }
 
-Wait-Job $j1, $j2 | Out-Null
+if ($device2Present) {
+    $jobs += Start-Job -ScriptBlock {
+        Set-Location $using:root
+        & $using:pio run -e device2 --target upload 2>&1
+        if ($using:IncludeFS) { & $using:pio run -e device2 --target uploadfs 2>&1 }
+    }
+} else {
+    $jobs += $null
+}
 
-Write-Host "`n=== device1 (COM16) ===" -ForegroundColor Yellow
-Receive-Job $j1
+$runningJobs = $jobs | Where-Object { $_ -ne $null }
+if ($runningJobs) { Wait-Job $runningJobs | Out-Null }
 
-Write-Host "`n=== device2 (COM17) ===" -ForegroundColor Yellow
-Receive-Job $j2
+if ($device1Present) {
+    Write-Host "`n=== device1 (COM16) ===" -ForegroundColor Yellow
+    Receive-Job $jobs[0]
+} else {
+    Write-Host "`n=== device1 (COM16) — SKIPPED (not connected) ===" -ForegroundColor DarkYellow
+}
 
-$failed = ($j1.State -eq 'Failed') -or ($j2.State -eq 'Failed')
-Remove-Job $j1, $j2
+if ($device2Present) {
+    Write-Host "`n=== device2 (COM17) ===" -ForegroundColor Yellow
+    Receive-Job $jobs[1]
+} else {
+    Write-Host "`n=== device2 (COM17) — SKIPPED (not connected) ===" -ForegroundColor DarkYellow
+}
+
+$failed = $false
+foreach ($j in $runningJobs) {
+    if ($j.State -eq 'Failed') { $failed = $true }
+}
+Remove-Job $runningJobs
 if ($failed) { exit 1 }

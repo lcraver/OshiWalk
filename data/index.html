@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ProxiOshi</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#111;color:#eee;padding:16px;max-width:500px;margin:0 auto}
+h1{font-size:1.5em;margin-bottom:2px}
+.sub{color:#666;font-size:.85em;margin-bottom:24px}
+h2{font-size:.8em;color:#777;text-transform:uppercase;letter-spacing:.08em;margin:24px 0 10px}
+#gif-list{list-style:none}
+#gif-list li{display:flex;align-items:center;justify-content:space-between;background:#1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px}
+.gif-info .name{font-size:.9em;word-break:break-all}
+.gif-info .size{font-size:.75em;color:#666;margin-top:3px}
+.badge{font-size:.65em;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:5px;font-weight:600}
+.badge-lfs{background:#1a3a1a;color:#4c4}
+.badge-sd{background:#1a2a3a;color:#46c}
+.gif-btns{display:flex;gap:6px;flex-shrink:0;margin-left:12px}
+.play-btn{background:#1a3a1a;border:none;color:#4c4;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:.95em}
+.play-btn:hover{background:#254}
+.del{background:#8b0000;border:none;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-size:.85em}
+.del:hover{background:#c00}
+.empty{color:#444;font-style:italic;font-size:.9em;padding:8px 0}
+#drop{border:2px dashed #333;border-radius:10px;padding:28px 16px;text-align:center;color:#555;cursor:pointer;transition:.2s}
+#drop.over{border-color:#5af;color:#5af;background:#0d1a2a}
+#drop input{display:none}
+#up-btn{width:100%;margin-top:10px;padding:12px;background:#1a7a40;color:#fff;border:none;border-radius:8px;font-size:1em;cursor:pointer}
+#up-btn:disabled{background:#2a2a2a;color:#555;cursor:default}
+#prog{height:5px;background:#222;border-radius:3px;margin-top:8px;overflow:hidden;display:none}
+#prog-bar{height:100%;background:#2a6;width:0;transition:width .15s}
+#st{margin-top:8px;font-size:.8em;color:#777;min-height:16px}
+#lib-badge{display:inline-block;margin-top:6px;font-size:.75em;padding:2px 8px;border-radius:4px;background:#1a2a1a;color:#4a4}
+#lib-badge.warn{background:#2a2010;color:#aa8}
+.sbar-wrap{background:#1e1e1e;border-radius:6px;overflow:hidden;height:10px;margin-bottom:4px}
+.sbar{height:100%;background:#2a6;transition:width .4s}
+.sbar.warn{background:#a82}
+.sbar.full{background:#a33}
+.sbar-label{font-size:.75em;color:#666;margin-bottom:12px}
+/* sd file list */
+#sd-section{display:none}
+#sd-list{list-style:none}
+#sd-list li{display:flex;align-items:center;justify-content:space-between;background:#1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;flex-wrap:wrap;gap:6px}
+#sd-list .fi{flex:1;min-width:0}
+#sd-list .fi .name{font-size:.9em;word-break:break-all}
+#sd-list .fi .size{font-size:.75em;color:#666;margin-top:3px}
+.dl{background:#226;border:none;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-size:.85em;text-decoration:none}
+.dl:hover{background:#338}
+#crop-section{margin-top:10px;display:none}
+.crop-hint{font-size:.8em;color:#666;margin-bottom:6px}
+#preview-canvas{display:block;border-radius:6px;max-width:100%;cursor:move;touch-action:none}
+#crop-meta{font-size:.75em;color:#555;margin-top:5px;min-height:14px}
+#reset-crop{margin-top:7px;padding:5px 12px;background:#1e1e1e;color:#777;border:1px solid #2a2a2a;border-radius:5px;cursor:pointer;font-size:.8em}
+#reset-crop:hover{color:#aaa}
+#sd-drop{border:2px dashed #333;border-radius:10px;padding:28px 16px;text-align:center;color:#555;cursor:pointer;transition:.2s}
+#sd-drop.over{border-color:#5af;color:#5af;background:#0d1a2a}
+#sd-drop input{display:none}
+#sd-up-btn{width:100%;margin-top:10px;padding:12px;background:#1a407a;color:#fff;border:none;border-radius:8px;font-size:1em;cursor:pointer}
+#sd-up-btn:disabled{background:#2a2a2a;color:#555;cursor:default}
+#sd-prog{height:5px;background:#222;border-radius:3px;margin-top:8px;overflow:hidden;display:none}
+#sd-prog-bar{height:100%;background:#46a;width:0;transition:width .15s}
+#sd-st{margin-top:8px;font-size:.8em;color:#777;min-height:16px}
+.wf input{width:100%;padding:10px 12px;background:#1e1e1e;border:1px solid #333;border-radius:6px;color:#eee;margin-bottom:8px;font-size:.9em}
+.wf input::placeholder{color:#555}
+.wf button{padding:10px 20px;background:#334;color:#eee;border:none;border-radius:6px;cursor:pointer;font-size:.9em}
+.wf button:hover{background:#446}
+</style>
+</head>
+<body>
+<h1>ProxiOshi</h1>
+<div class="sub" id="info">connecting…</div>
+
+<h2>Storage</h2>
+<div style="font-size:.75em;color:#999;margin-bottom:4px">Device (LittleFS)</div>
+<div class="sbar-wrap"><div id="lfs-bar" class="sbar" style="width:0%"></div></div>
+<div id="lfs-label" class="sbar-label">…</div>
+<div id="sd-space" style="display:none">
+  <div style="font-size:.75em;color:#999;margin-bottom:4px">SD Card</div>
+  <div class="sbar-wrap"><div id="sd-bar" class="sbar" style="width:0%"></div></div>
+  <div id="sd-label" class="sbar-label">…</div>
+</div>
+
+<h2>GIFs on device</h2>
+<ul id="gif-list"><li class="empty">Loading…</li></ul>
+
+<h2>Upload GIF</h2>
+<div id="drop" onclick="document.getElementById('fi').click()">
+  <input type="file" id="fi" accept=".gif,.png,.jpg,.jpeg,.webp" multiple>
+  <span id="drop-label">Tap or drag .gif files here</span>
+</div>
+<div id="lib-badge">⏳ loading resize libs…</div>
+<div id="crop-section">
+  <div class="crop-hint">Drag to reposition crop · 240×320</div>
+  <canvas id="preview-canvas"></canvas>
+  <div id="crop-meta"></div>
+  <button id="reset-crop" onclick="resetCropToCenter()">Reset to center</button>
+</div>
+<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:.85em;color:#888;cursor:pointer">
+  <input type="checkbox" id="pref-internal" onchange="setStoragePref(this.checked)">
+  Save to device storage instead of SD card
+</label>
+<button id="up-btn" disabled>Upload</button>
+<div id="prog"><div id="prog-bar"></div></div>
+<div id="st"></div>
+
+<div id="sd-section">
+<div id="sd-unformatted" style="display:none">
+  <p style="color:#aa8;font-size:.9em;margin-bottom:10px">⚠ SD card detected but not formatted. Format it as FAT32 to use it here.</p>
+  <button onclick="formatSd()" style="padding:9px 18px;background:#6a3;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.9em">Format SD Card</button>
+  <div id="fmt-st" style="margin-top:8px;font-size:.8em;color:#777"></div>
+</div>
+
+<div id="sd-file-area">
+<h2>SD Card Files</h2>
+<ul id="sd-list"><li class="empty">Loading…</li></ul>
+
+<h2>Upload to SD Card</h2>
+<div id="sd-drop" onclick="document.getElementById('sd-fi').click()">
+  <input type="file" id="sd-fi" multiple>
+  <span id="sd-drop-label">Tap or drag files here</span>
+</div>
+<button id="sd-up-btn" disabled>Upload to SD</button>
+<div id="sd-prog"><div id="sd-prog-bar"></div></div>
+<div id="sd-st"></div>
+</div>
+</div>
+
+<h2>WiFi Settings</h2>
+<div class="wf">
+  <input type="text"     id="ssid" placeholder="Network SSID (leave blank to stay in AP mode)">
+  <input type="password" id="pw"   placeholder="Password">
+  <button onclick="saveWifi()">Save &amp; Restart</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const TARGET_W = 240, TARGET_H = 320;
+
+// ── GIF processing libs (CDN, graceful fallback) ──────────────────────────────
+
+let libsReady = false;
+let workerBlobUrl = null;
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+(async () => {
+  try {
+    await loadScript('https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js');
+    const workerResp = await fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js');
+    if (!workerResp.ok) throw new Error();
+    workerBlobUrl = URL.createObjectURL(await workerResp.blob());
+    await loadScript('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js');
+    libsReady = true;
+    $('lib-badge').textContent = '✓ will resize to 240×320 before upload';
+    $('lib-badge').className = '';
+    Object.assign($('lib-badge').style, {background:'#1a2a1a', color:'#4a4'});
+  } catch(_) {
+    $('lib-badge').textContent = '⚠ resize unavailable (no internet) — uploading original';
+    $('lib-badge').className = 'warn';
+  }
+})();
+
+// ── resize + re-encode a single GIF file ─────────────────────────────────────
+
+async function processGif(file, onStatus, forceCropX = null, forceCropY = null, forceCropW = null, forceCropH = null) {
+  const buf  = await file.arrayBuffer();
+  const data = new Uint8Array(buf);
+
+  // Read native dimensions from GIF logical screen descriptor
+  const srcW = data[6] | (data[7] << 8);
+  const srcH = data[8] | (data[9] << 8);
+
+  const needsScale = srcW > TARGET_W || srcH > TARGET_H;
+  const tooBig     = file.size > 300 * 1024;
+
+  if (!needsScale && !tooBig) return file; // already fits, skip re-encode
+
+  if (!libsReady) {
+    onStatus('Skipping resize (libs unavailable) — uploading original');
+    return file;
+  }
+
+  onStatus(`Decoding ${srcW}×${srcH} GIF…`);
+  await tick();
+
+  let reader;
+  try { reader = new GifReader(data); }
+  catch(e) { onStatus('Decode failed — uploading original'); return file; }
+
+  const nFrames = reader.numFrames();
+  const scale  = Math.max(srcW / TARGET_W, srcH / TARGET_H);
+  const cropW  = forceCropW !== null ? forceCropW : TARGET_W * scale;
+  const cropH  = forceCropH !== null ? forceCropH : TARGET_H * scale;
+  const offX  = forceCropX !== null ? Math.max(0, Math.min(srcW - cropW, forceCropX)) : Math.round((srcW - cropW) / 2);
+  const offY  = forceCropY !== null ? Math.max(0, Math.min(srcH - cropH, forceCropY)) : Math.round((srcH - cropH) / 2);
+
+  const srcCanvas = Object.assign(document.createElement('canvas'), {width: srcW, height: srcH});
+  const srcCtx    = srcCanvas.getContext('2d');
+  const dstCanvas = Object.assign(document.createElement('canvas'), {width: TARGET_W, height: TARGET_H});
+  const dstCtx    = dstCanvas.getContext('2d');
+
+  // Accumulate composited pixels frame by frame (handles inter-frame deltas)
+  const accum = new Uint8ClampedArray(srcW * srcH * 4);
+
+  const encoder = new GIF({
+    workers: 1, quality: 10,
+    width: TARGET_W, height: TARGET_H,
+    workerScript: workerBlobUrl
+  });
+
+  for (let i = 0; i < nFrames; i++) {
+    onStatus(`Resizing frame ${i + 1} / ${nFrames}…`);
+    if (i % 4 === 3) await tick(); // keep UI responsive
+
+    const info = reader.frameInfo(i);
+    reader.decodeAndBlitFrameRGBA(i, accum);
+
+    srcCtx.putImageData(new ImageData(new Uint8ClampedArray(accum), srcW, srcH), 0, 0);
+    dstCtx.clearRect(0, 0, TARGET_W, TARGET_H);
+    dstCtx.drawImage(srcCanvas, offX, offY, cropW, cropH, 0, 0, TARGET_W, TARGET_H);
+
+    encoder.addFrame(dstCtx, { delay: Math.max((info.delay || 5) * 10, 20), copy: true });
+  }
+
+  onStatus('Encoding resized GIF…');
+  await tick();
+
+  return new Promise((resolve, reject) => {
+    encoder.on('finished', blob => resolve(new File([blob], file.name, {type: 'image/gif'})));
+    encoder.on('error',    err  => { console.error(err); resolve(file); }); // fallback
+    encoder.render();
+  });
+}
+
+function tick() { return new Promise(r => setTimeout(r, 0)); }
+
+// ── static image resize (non-GIF → PNG) ──────────────────────────────────────
+
+async function processImage(file, onStatus, forceCropX = null, forceCropY = null, forceCropW = null, forceCropH = null) {
+  onStatus('Resizing image…');
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => {
+    const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url;
+  }).catch(() => null);
+  URL.revokeObjectURL(url);
+  if (!img) return file;
+
+  const srcW = img.naturalWidth, srcH = img.naturalHeight;
+  const scale = Math.max(srcW / TARGET_W, srcH / TARGET_H);
+  const cropW = forceCropW !== null ? forceCropW : TARGET_W * scale;
+  const cropH = forceCropH !== null ? forceCropH : TARGET_H * scale;
+  const offX  = forceCropX !== null ? Math.max(0, Math.min(srcW - cropW, forceCropX)) : (srcW - cropW) / 2;
+  const offY  = forceCropY !== null ? Math.max(0, Math.min(srcH - cropH, forceCropY)) : (srcH - cropH) / 2;
+
+  const canvas = Object.assign(document.createElement('canvas'),
+                               {width: TARGET_W, height: TARGET_H});
+  canvas.getContext('2d').drawImage(img, offX, offY, cropW, cropH,
+                                    0, 0, TARGET_W, TARGET_H);
+
+  const blob    = await new Promise(r => canvas.toBlob(r, 'image/png', 1.0));
+  const newName = file.name.replace(/\.[^.]+$/, '.png');
+  const result  = new File([blob], newName, {type: 'image/png'});
+
+  const origKB = (file.size / 1024).toFixed(0);
+  const newKB  = (result.size / 1024).toFixed(0);
+  onStatus(`Resized ${srcW}×${srcH} → 240×320 PNG (${origKB} KB → ${newKB} KB)`);
+  return result;
+}
+
+// ── crop UI ───────────────────────────────────────────────────────────────────
+
+let srcCanvas  = null;  // first frame at native resolution
+let cropState  = null;  // {srcW,srcH,cropW,cropH,offX,offY,dispScale}
+
+async function initCropUI(file) {
+  $('crop-section').style.display = 'none';
+  cropState = null;
+
+  // Use a plain <img> for the preview — no external libs needed.
+  const url = URL.createObjectURL(file);
+  const result = await new Promise(res => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+  URL.revokeObjectURL(url);
+  if (!result) return;
+
+  const srcW = result.naturalWidth, srcH = result.naturalHeight;
+  if (!srcW || !srcH) return;
+
+  srcCanvas = document.createElement('canvas');
+  srcCanvas.width = srcW; srcCanvas.height = srcH;
+  srcCanvas.getContext('2d').drawImage(result, 0, 0);
+
+  // Largest 3:4 crop that fits entirely within the image
+  const scale     = Math.min(srcW / TARGET_W, srcH / TARGET_H);
+  const cropW     = TARGET_W * scale;
+  const cropH     = TARGET_H * scale;
+  const dispScale = Math.min(1, 320 / srcW, 440 / srcH);
+
+  cropState = { srcW, srcH, cropW, cropH, dispScale,
+                offX: (srcW - cropW) / 2, offY: (srcH - cropH) / 2 };
+
+  const cv = $('preview-canvas');
+  cv.width  = Math.round(srcW * dispScale);
+  cv.height = Math.round(srcH * dispScale);
+
+  $('crop-section').style.display = 'block';
+  drawCropOverlay();
+}
+
+function drawCropOverlay() {
+  if (!cropState || !srcCanvas) return;
+  const { srcW, srcH, cropW, cropH, offX, offY, dispScale } = cropState;
+  const cv  = $('preview-canvas');
+  const ctx = cv.getContext('2d');
+  const dW  = cv.width, dH = cv.height;
+
+  ctx.drawImage(srcCanvas, 0, 0, dW, dH);
+
+  // darken outside crop
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, dW, dH);
+
+  // reveal crop area
+  const bx = Math.round(offX * dispScale), by = Math.round(offY * dispScale);
+  const bw = Math.round(cropW * dispScale), bh = Math.round(cropH * dispScale);
+  ctx.drawImage(srcCanvas, offX, offY, cropW, cropH, bx, by, bw, bh);
+
+  // border
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(bx + 1, by + 1, bw - 2, bh - 2);
+
+  // corner handles — larger for touch, outlined for visibility
+  const h = 14;
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 1;
+  [[bx-h/2, by-h/2],[bx+bw-h/2, by-h/2],[bx-h/2, by+bh-h/2],[bx+bw-h/2, by+bh-h/2]]
+    .forEach(([x,y]) => { ctx.fillRect(x,y,h,h); ctx.strokeRect(x+0.5,y+0.5,h-1,h-1); });
+
+  $('crop-meta').textContent =
+    `Source ${srcW}×${srcH}  ·  crop ${Math.round(cropW)}×${Math.round(cropH)} at (${Math.round(offX)}, ${Math.round(offY)})`;
+}
+
+function resetCropToCenter() {
+  if (!cropState) return;
+  const { srcW, srcH } = cropState;
+  const scale  = Math.min(srcW / TARGET_W, srcH / TARGET_H);
+  cropState.cropW = TARGET_W * scale;
+  cropState.cropH = TARGET_H * scale;
+  cropState.offX  = (srcW - cropState.cropW) / 2;
+  cropState.offY  = (srcH - cropState.cropH) / 2;
+  drawCropOverlay();
+}
+
+// drag + resize — mouse + touch
+const HANDLE = 18;  // handle hit zone in display px
+const RATIO   = TARGET_H / TARGET_W; // 4/3
+const MIN_SRC = 48; // minimum crop size in source px
+
+let _drag = false, _dsx, _dsy, _dox, _doy, _dwx, _dhy;
+let _dragMode = 'move'; // 'move' | 'tl' | 'tr' | 'bl' | 'br'
+let _fixX = 0, _fixY = 0; // fixed corner in source px during resize
+
+function _hitCorner(lx, ly) {
+  if (!cropState) return null;
+  const { offX, offY, cropW, cropH, dispScale } = cropState;
+  const bx = offX * dispScale, by = offY * dispScale;
+  const bw = cropW * dispScale, bh = cropH * dispScale;
+  const h  = HANDLE;
+  if (lx < bx - h || lx > bx + bw + h || ly < by - h || ly > by + bh + h) return null;
+  if (lx <= bx + h && ly <= by + h) return 'tl';
+  if (lx >= bx + bw - h && ly <= by + h) return 'tr';
+  if (lx <= bx + h && ly >= by + bh - h) return 'bl';
+  if (lx >= bx + bw - h && ly >= by + bh - h) return 'br';
+  if (lx >= bx && lx <= bx + bw && ly >= by && ly <= by + bh) return 'move';
+  return null;
+}
+
+function _localXY(clientX, clientY) {
+  const r = $('preview-canvas').getBoundingClientRect();
+  return [clientX - r.left, clientY - r.top];
+}
+
+function _cropStart(clientX, clientY) {
+  if (!cropState) return;
+  const [lx, ly] = _localXY(clientX, clientY);
+  const corner = _hitCorner(lx, ly);
+  if (!corner) return;
+  _drag = true; _dragMode = corner;
+  _dsx = clientX; _dsy = clientY;
+  _dox = cropState.offX; _doy = cropState.offY;
+  _dwx = cropState.cropW; _dhy = cropState.cropH;
+  if (corner === 'tl') { _fixX = cropState.offX + cropState.cropW; _fixY = cropState.offY + cropState.cropH; }
+  if (corner === 'tr') { _fixX = cropState.offX;                   _fixY = cropState.offY + cropState.cropH; }
+  if (corner === 'bl') { _fixX = cropState.offX + cropState.cropW; _fixY = cropState.offY; }
+  if (corner === 'br') { _fixX = cropState.offX;                   _fixY = cropState.offY; }
+}
+
+function _cropMove(clientX, clientY) {
+  if (!_drag || !cropState) return;
+  const { srcW, srcH, dispScale } = cropState;
+  const dx = (clientX - _dsx) / dispScale;
+  const dy = (clientY - _dsy) / dispScale;
+
+  if (_dragMode === 'move') {
+    cropState.offX = Math.max(0, Math.min(srcW - _dwx, _dox + dx));
+    cropState.offY = Math.max(0, Math.min(srcH - _dhy, _doy + dy));
+  } else {
+    // Resize — keep opposite corner fixed, maintain 3:4 ratio
+    let w, h, ox, oy;
+    if (_dragMode === 'br') { w = _dwx + dx; h = w * RATIO; ox = _fixX;     oy = _fixY; }
+    if (_dragMode === 'bl') { w = _dwx - dx; h = w * RATIO; ox = _fixX - w; oy = _fixY; }
+    if (_dragMode === 'tr') { w = _dwx + dx; h = w * RATIO; ox = _fixX;     oy = _fixY - h; }
+    if (_dragMode === 'tl') { w = _dwx - dx; h = w * RATIO; ox = _fixX - w; oy = _fixY - h; }
+
+    w = Math.max(MIN_SRC, w);
+    h = w * RATIO;
+    // clamp to source bounds
+    if (ox < 0)           { ox = 0; }
+    if (oy < 0)           { oy = 0; }
+    if (ox + w > srcW)    { w = srcW - ox; h = w * RATIO; }
+    if (oy + h > srcH)    { h = srcH - oy; w = h / RATIO; }
+
+    cropState.cropW = w; cropState.cropH = h;
+    cropState.offX  = Math.max(0, ox);
+    cropState.offY  = Math.max(0, oy);
+  }
+  drawCropOverlay();
+}
+
+$('preview-canvas').addEventListener('mousedown',  e => _cropStart(e.clientX, e.clientY));
+document.addEventListener('mousemove',  e => { if (_drag) _cropMove(e.clientX, e.clientY); });
+document.addEventListener('mouseup',    () => { _drag = false; });
+$('preview-canvas').addEventListener('touchstart', e => { e.preventDefault(); _cropStart(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+document.addEventListener('touchmove',  e => { if (_drag) { e.preventDefault(); _cropMove(e.touches[0].clientX, e.touches[0].clientY); } }, {passive:false});
+document.addEventListener('touchend',   () => { _drag = false; });
+
+// ── file selection ────────────────────────────────────────────────────────────
+
+const fi = $('fi'), drop = $('drop'), upBtn = $('up-btn');
+let pendingFiles = null;
+
+function setFiles(f) {
+  pendingFiles = f && f.length ? f : null;
+  $('drop-label').textContent = pendingFiles
+    ? pendingFiles.length + ' file(s) ready'
+    : 'Tap or drag .gif files here';
+
+  if (pendingFiles && pendingFiles.length > 0) {
+    upBtn.disabled = true; // hold until crop preview is ready
+    initCropUI(pendingFiles[0]).finally(() => { upBtn.disabled = false; });
+  } else {
+    upBtn.disabled = true;
+    $('crop-section').style.display = 'none';
+    cropState = null;
+  }
+}
+
+fi.addEventListener('change', () => setFiles(fi.files));
+drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over'); setFiles(e.dataTransfer.files);
+});
+
+// ── upload ────────────────────────────────────────────────────────────────────
+
+upBtn.addEventListener('click', async () => {
+  if (!pendingFiles) return;
+  upBtn.disabled = true;
+  $('prog').style.display = 'block';
+  const bar = $('prog-bar'), st = $('st');
+
+  for (let i = 0; i < pendingFiles.length; i++) {
+    const raw = pendingFiles[i];
+    bar.style.width = '0%';
+
+    // Process (resize/crop) before upload
+    let toUpload;
+    const cx    = (i === 0 && cropState) ? cropState.offX  : null;
+    const cy    = (i === 0 && cropState) ? cropState.offY  : null;
+    const cw    = (i === 0 && cropState) ? cropState.cropW : null;
+    const ch    = (i === 0 && cropState) ? cropState.cropH : null;
+    const isGif = raw.name.toLowerCase().endsWith('.gif');
+    const label = msg => { st.textContent = `[${i+1}/${pendingFiles.length}] ${msg}`; };
+    try {
+      toUpload = isGif
+        ? await processGif(raw, label, cx, cy, cw, ch)
+        : await processImage(raw, label, cx, cy, cw, ch);
+    } catch(e) {
+      st.textContent = `Processing error: ${e.message} — uploading original`;
+      toUpload = raw;
+    }
+
+    // Check space — if LittleFS is full the server will spill to SD automatically
+    const spaceResp = await fetch('/api/space').then(r => r.json()).catch(() => null);
+    if (spaceResp) {
+      const lfsFree = spaceResp.lfs_total - spaceResp.lfs_used;
+      if (toUpload.size >= lfsFree) {
+        if (spaceResp.sd_mounted) {
+          st.textContent = `Device storage full — routing to SD card`;
+        } else {
+          const freeKB = (lfsFree / 1024).toFixed(0);
+          const needKB = (toUpload.size / 1024).toFixed(0);
+          st.textContent = `❌ Not enough space — need ${needKB} KB, only ${freeKB} KB free (no SD card)`;
+          upBtn.disabled = false;
+          loadSpace();
+          break;
+        }
+      }
+    }
+
+    const origKB   = (raw.size      / 1024).toFixed(0);
+    const uploadKB = (toUpload.size / 1024).toFixed(0);
+    const shrunk   = toUpload !== raw ? ` (${origKB} KB → ${uploadKB} KB)` : ` (${uploadKB} KB)`;
+    st.textContent = `Uploading ${raw.name}${shrunk}…`;
+
+    await new Promise((res, rej) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload');
+      xhr.upload.onprogress = e => { if (e.lengthComputable) bar.style.width = (e.loaded/e.total*100)+'%'; };
+      xhr.onload  = () => (xhr.status < 400 ? res() : rej(new Error(xhr.responseText)));
+      xhr.onerror = () => rej(new Error('Network error'));
+      const fd = new FormData(); fd.append('file', toUpload, raw.name);
+      xhr.send(fd);
+    }).catch(e => st.textContent = `Upload error: ${e.message}`);
+  }
+
+  bar.style.width = '100%';
+  st.textContent  = 'Saving to device…';
+
+  // Poll until the main loop has flushed the upload buffer to the filesystem
+  for (let i = 0; i < 60; i++) {
+    const s = await fetch('/api/upload-status').then(r => r.json()).catch(() => ({flushed: true}));
+    if (s.flushed) break;
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  st.textContent = 'Done!';
+  setTimeout(() => { $('prog').style.display = 'none'; st.textContent = ''; }, 2000);
+  setFiles(null); fi.value = '';
+  loadGifs();
+  loadSpace();
+});
+
+// ── gif list ──────────────────────────────────────────────────────────────────
+
+async function loadGifs() {
+  const r    = await fetch('/api/gifs');
+  const list = await r.json();
+  const ul   = $('gif-list');
+  if (!list.length) { ul.innerHTML = '<li class="empty">No GIFs yet — upload one above</li>'; return; }
+  ul.innerHTML = list.map(f => `<li>
+    <div class="gif-info">
+      <div class="name">${f.name}<span class="badge badge-${f.storage}">${f.storage.toUpperCase()}</span></div>
+      <div class="size">${(f.size/1024).toFixed(1)} KB</div>
+    </div>
+    <div class="gif-btns">
+      <button class="play-btn" onclick="playGif('${f.name}')" title="Play on device">▶</button>
+      <button class="del"      onclick="del('${f.name}','${f.storage}')">Delete</button>
+    </div>
+  </li>`).join('');
+}
+
+async function playGif(name) {
+  const fd = new FormData(); fd.append('name', name);
+  await fetch('/play', {method:'POST', body:fd});
+}
+
+async function del(name, storage) {
+  if (!confirm('Delete ' + name + '?')) return;
+  const fd = new FormData(); fd.append('name', name); fd.append('storage', storage);
+  const r = await fetch('/delete', {method:'POST', body:fd});
+  if (!r.ok) { alert('Delete failed'); return; }
+  loadGifs();
+  loadSpace();
+}
+
+// ── storage preference ────────────────────────────────────────────────────────
+
+async function setStoragePref(internal) {
+  const fd = new FormData(); fd.append('internal', internal ? '1' : '0');
+  await fetch('/api/storage-pref', {method:'POST', body:fd});
+}
+
+// ── sd format ─────────────────────────────────────────────────────────────────
+
+async function formatSd() {
+  if (!confirm('This will erase everything on the SD card. Continue?')) return;
+  $('fmt-st').textContent = 'Formatting… this may take a moment.';
+  const r = await fetch('/sdformat', {method:'POST'}).catch(() => null);
+  if (!r || !r.ok) {
+    $('fmt-st').textContent = 'Format failed: ' + (r ? await r.text() : 'no response');
+    return;
+  }
+  $('fmt-st').textContent = 'Done! Reloading…';
+  setTimeout(() => location.reload(), 1500);
+}
+
+// ── wifi ──────────────────────────────────────────────────────────────────────
+
+async function saveWifi() {
+  const fd = new FormData();
+  fd.append('ssid',     $('ssid').value.trim());
+  fd.append('password', $('pw').value);
+  const r = await fetch('/wifi', {method:'POST', body:fd});
+  if (r.ok) alert('Saved! Device is restarting…');
+  else alert('Save failed');
+}
+
+// ── init ──────────────────────────────────────────────────────────────────────
+
+function fmtBytes(b) {
+  return b >= 1024*1024 ? (b/1024/1024).toFixed(1)+' MB' : (b/1024).toFixed(0)+' KB';
+}
+
+function applyBar(barEl, labelEl, used, total) {
+  const pct = used / total * 100;
+  barEl.style.width = pct + '%';
+  barEl.className = 'sbar' + (pct > 90 ? ' full' : pct > 70 ? ' warn' : '');
+  labelEl.textContent = `${fmtBytes(total - used)} free of ${fmtBytes(total)}`;
+}
+
+function loadSpace() {
+  fetch('/api/space').then(r => r.json()).then(d => {
+    applyBar($('lfs-bar'), $('lfs-label'), d.lfs_used, d.lfs_total);
+
+    $('sd-space').style.display   = d.sd_present ? '' : 'none';
+    $('sd-section').style.display = d.sd_present ? '' : 'none';
+    $('sd-unformatted').style.display = (d.sd_present && !d.sd_mounted) ? '' : 'none';
+    $('sd-file-area').style.display   = d.sd_mounted ? '' : 'none';
+
+    if (d.sd_mounted) applyBar($('sd-bar'), $('sd-label'), d.sd_used, d.sd_total);
+    else if (d.sd_present) {
+      $('sd-bar').style.width = '0%';
+      $('sd-label').textContent = 'Card detected — not formatted';
+    }
+  });
+}
+
+// ── SD file list ──────────────────────────────────────────────────────────────
+
+async function loadSdFiles() {
+  const r    = await fetch('/api/sdfiles');
+  const list = await r.json();
+  const ul   = $('sd-list');
+  if (!list.length) { ul.innerHTML = '<li class="empty">No files on SD card</li>'; return; }
+  ul.innerHTML = list.map(f => `<li>
+    <div class="fi">
+      <div class="name">${f.name}</div>
+      <div class="size">${fmtBytes(f.size)}</div>
+    </div>
+    <a class="dl" href="/sddownload?name=${encodeURIComponent(f.name)}" download="${f.name}">Download</a>
+    <button class="del" onclick="sdDel('${f.name.replace(/'/g,"\\'")}')">Delete</button>
+  </li>`).join('');
+}
+
+async function sdDel(name) {
+  if (!confirm('Delete ' + name + ' from SD card?')) return;
+  const fd = new FormData(); fd.append('name', name);
+  const r = await fetch('/sddelete', {method:'POST', body:fd});
+  if (!r.ok) { alert('Delete failed: ' + await r.text()); return; }
+  loadSdFiles(); loadSpace();
+}
+
+// ── SD upload ─────────────────────────────────────────────────────────────────
+
+const sdFi = $('sd-fi'), sdDrop = $('sd-drop'), sdUpBtn = $('sd-up-btn');
+let sdFiles = null;
+
+function setSdFiles(f) {
+  sdFiles = f && f.length ? f : null;
+  sdUpBtn.disabled = !sdFiles;
+  $('sd-drop-label').textContent = sdFiles ? sdFiles.length + ' file(s) ready' : 'Tap or drag files here';
+}
+
+sdFi.addEventListener('change', () => setSdFiles(sdFi.files));
+sdDrop.addEventListener('dragover',  e => { e.preventDefault(); sdDrop.classList.add('over'); });
+sdDrop.addEventListener('dragleave', () => sdDrop.classList.remove('over'));
+sdDrop.addEventListener('drop', e => { e.preventDefault(); sdDrop.classList.remove('over'); setSdFiles(e.dataTransfer.files); });
+
+sdUpBtn.addEventListener('click', async () => {
+  if (!sdFiles) return;
+  sdUpBtn.disabled = true;
+  $('sd-prog').style.display = 'block';
+  const bar = $('sd-prog-bar'), st = $('sd-st');
+
+  for (let i = 0; i < sdFiles.length; i++) {
+    const f = sdFiles[i];
+    bar.style.width = '0%';
+    st.textContent  = `Uploading ${f.name} (${i+1}/${sdFiles.length})…`;
+
+    await new Promise((res, rej) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/sdupload');
+      xhr.upload.onprogress = e => { if (e.lengthComputable) bar.style.width = (e.loaded/e.total*100)+'%'; };
+      xhr.onload  = () => (xhr.status < 400 ? res() : rej(new Error(xhr.responseText)));
+      xhr.onerror = () => rej(new Error('Network error'));
+      const fd = new FormData(); fd.append('file', f, f.name);
+      xhr.send(fd);
+    }).catch(e => { st.textContent = `Error: ${e.message}`; });
+  }
+
+  bar.style.width = '100%';
+  st.textContent  = 'Done!';
+  setTimeout(() => { $('sd-prog').style.display = 'none'; st.textContent = ''; }, 3000);
+  setSdFiles(null); sdFi.value = '';
+  loadSdFiles(); loadSpace();
+});
+
+fetch('/api/info').then(r => r.json()).then(d => {
+  $('info').textContent = (d.ap ? 'AP mode' : 'WiFi') + '  ·  ' + d.ip;
+});
+fetch('/api/storage-pref').then(r => r.json()).then(d => {
+  $('pref-internal').checked = d.internal;
+});
+loadSpace();
+loadGifs();
+loadSdFiles();
+</script>
+</body>
+</html>
