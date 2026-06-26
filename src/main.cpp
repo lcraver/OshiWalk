@@ -115,7 +115,7 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
 
-    drawBootLogo(tft, 120, 104);
+    // drawBootLogo(tft, 120, 104);
 
     tft.setTextSize(2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
