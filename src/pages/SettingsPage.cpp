@@ -138,28 +138,21 @@ void SettingsPage::drawMain() {
 
     // ── SD card ──────────────────────────────────────────────────────────────
     bool sdMnt = webserver_sd_mounted();
-    bool sdPrs = webserver_sd_present();
-    uint8_t cardType = SD_MMC.cardType();
-    static const char *cardNames[] = { "NONE", "MMC", "SD", "SDHC", "UNKN" };
-    const char *typeName = (cardType <= 4) ? cardNames[cardType] : "?";
 
     tft.setTextColor(0x8410, TFT_BLACK);
     tft.drawString("SD Card", 10, 193);
 
-    char diagBuf[48];
-    snprintf(diagBuf, sizeof(diagBuf), "type:%s  mnt:%d  prs:%d",
-             typeName, sdMnt ? 1 : 0, sdPrs ? 1 : 0);
-    tft.setTextColor(0x4A69, TFT_BLACK);
-    tft.drawString(diagBuf, 10, 204);
-
     if (!sdMnt) {
         tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-        tft.drawString("Not mounted — tap to format", 10, 218);
-        drawBtn(tft, 228, "Format SD Card", 0x6320, TFT_WHITE);
+        tft.drawString("Not mounted — tap to format", 10, 204);
+        drawBtn(tft, 214, "Format SD Card", 0x6320, TFT_WHITE);
     } else {
-        uint32_t sdTotal = (uint32_t)(SD_MMC.totalBytes() / 1024 / 1024);
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        tft.drawString((String(sdTotal) + " MB total").c_str(), 10, 218);
+        uint32_t sdUsed  = (uint32_t)(SD_MMC.usedBytes()  / 1024);
+        uint32_t sdTotal = (uint32_t)(SD_MMC.totalBytes() / 1024);
+        uint32_t sdFree  = sdTotal > sdUsed ? sdTotal - sdUsed : 0;
+        drawStorageBar(tft, 8, 202, 224, 10, sdUsed, sdTotal);
+        tft.setTextColor(0x6B4D, TFT_BLACK);
+        tft.drawString((humanBytes(sdFree) + " free / " + humanBytes(sdTotal)).c_str(), 10, 216);
     }
 
     drawDotsAndVersion();
@@ -375,7 +368,7 @@ void SettingsPage::handleMainTap(int16_t x, int16_t y) {
         return;
     }
     // Format SD button
-    if (!webserver_sd_mounted() && y >= 228 && y < 254) {
+    if (!webserver_sd_mounted() && y >= 214 && y < 240) {
         mode = Mode::CONFIRM_FMT;
         drawConfirmFmt();
         return;
