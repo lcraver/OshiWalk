@@ -14,6 +14,7 @@
 #include "pages/StreetPassPage.h"
 #include "pages/GifPage.h"
 #include "pages/SettingsPage.h"
+#include "boot_logo.h"
 
 TFT_eSPI tft   = TFT_eSPI();
 XPT2046  touch(SPI, TOUCHSCREEN_CS_PIN, TOUCHSCREEN_IRQ_PIN);
@@ -114,18 +115,7 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
 
-    // Logo: overlapping circles
-    tft.fillCircle(108, 112, 26, 0x2945);
-    tft.fillCircle(132, 112, 26, 0x4A0A);
-    tft.fillCircle(120, 96,  26, 0x0C4A);
-    tft.fillCircle(120, 112, 18, 0x2965);
-    // Eyes
-    tft.fillCircle(113, 107, 4, TFT_WHITE);
-    tft.fillCircle(127, 107, 4, TFT_WHITE);
-    tft.fillCircle(114, 108, 2, TFT_BLACK);
-    tft.fillCircle(128, 108, 2, TFT_BLACK);
-    // Mouth
-    tft.drawArc(120, 116, 7, 5, 200, 340, TFT_WHITE, TFT_BLACK);
+    drawBootLogo(tft, 120, 104);
 
     tft.setTextSize(2);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
