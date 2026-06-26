@@ -139,6 +139,7 @@ void ota_check(TFT_eSPI &tft) {
 
     httpUpdate.onProgress([](int cur, int total) { otaProgress(cur, total); });
     httpUpdate.rebootOnUpdate(true);
+    httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
     WiFiClientSecure dlClient;
     dlClient.setInsecure();
