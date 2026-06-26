@@ -68,7 +68,10 @@ void ota_check(TFT_eSPI &tft) {
     int code = http.GET();
     if (code != 200) {
         char detail[32];
-        snprintf(detail, sizeof(detail), "HTTP %d", code);
+        if (code < 0)
+            snprintf(detail, sizeof(detail), "conn err %d", code);
+        else
+            snprintf(detail, sizeof(detail), "HTTP %d", code);
         Serial.printf("[OTA] manifest fetch failed: %d\n", code);
         http.end();
         otaSplash("Update check failed", "manifest fetch error", TFT_RED, TFT_DARKGREY, detail);
@@ -144,14 +147,17 @@ void ota_check(TFT_eSPI &tft) {
 
     // Only reached if update failed (success triggers reboot)
     switch (result) {
-        case HTTP_UPDATE_FAILED:
+        case HTTP_UPDATE_FAILED: {
+            char detail[32];
+            snprintf(detail, sizeof(detail), "err %d", httpUpdate.getLastError());
             Serial.printf("[OTA] update failed (%d): %s\n",
                           httpUpdate.getLastError(),
                           httpUpdate.getLastErrorString().c_str());
             otaSplash("Update failed", httpUpdate.getLastErrorString().c_str(),
-                      TFT_RED, TFT_DARKGREY);
+                      TFT_RED, TFT_DARKGREY, detail);
             delay(3000);
             break;
+        }
         case HTTP_UPDATE_NO_UPDATES:
             otaSplash("Up to date", "", TFT_GREEN, TFT_DARKGREY);
             delay(2000);

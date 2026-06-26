@@ -16,7 +16,11 @@ extern const char _binary_data_index_html_end[];
 static AsyncWebServer server(80);
 static File           s_sdUploadFile;
 static volatile bool  s_pendingRescan    = false;
-static volatile bool  s_uploadInProgress = false;
+static volatile bool  s_uploadInProgress   = false;
+static volatile bool  s_sdUploadInProgress = false;
+static volatile size_t s_sdUploadReceived  = 0;
+static volatile size_t s_sdUploadTotal     = 0;
+static char            s_sdUploadName[256] = {};
 static bool           s_sdMounted    = false;
 static bool           s_sdPresent    = false;
 
@@ -185,6 +189,10 @@ void webserver_init() {
                     if (final) req->send(507, "text/plain", "SD card full");
                     return;
                 }
+                strlcpy(s_sdUploadName, filename.c_str(), sizeof(s_sdUploadName));
+                s_sdUploadReceived  = 0;
+                s_sdUploadTotal     = req->contentLength();
+                s_sdUploadInProgress = true;
                 String path = "/" + filename;
                 s_sdUploadFile = SD_MMC.open(path, FILE_WRITE);
                 if (!s_sdUploadFile)
@@ -193,12 +201,14 @@ void webserver_init() {
 
             if (s_sdUploadFile)
                 s_sdUploadFile.write(data, len);
+            s_sdUploadReceived += len;
 
             if (final) {
                 if (s_sdUploadFile) {
                     s_sdUploadFile.close();
                     Serial.printf("webserver: SD uploaded %s\n", filename.c_str());
                 }
+                s_sdUploadInProgress = false;
             }
         }
     );
@@ -466,6 +476,11 @@ bool webserver_pending_rescan() {
     s_pendingRescan = false;
     return true;
 }
+
+bool webserver_sd_upload_in_progress() { return s_sdUploadInProgress; }
+size_t webserver_sd_bytes_received()   { return s_sdUploadReceived; }
+size_t webserver_sd_upload_total()     { return s_sdUploadTotal; }
+const char *webserver_sd_upload_name() { return s_sdUploadName; }
 
 bool webserver_upload_in_progress() {
     return s_uploadInProgress;

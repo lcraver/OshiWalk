@@ -11,6 +11,10 @@ void webserver_init();
 
 bool        webserver_pending_rescan();
 bool        webserver_upload_in_progress();
+bool        webserver_sd_upload_in_progress();
+size_t      webserver_sd_bytes_received();
+size_t      webserver_sd_upload_total();
+const char *webserver_sd_upload_name();
 size_t      webserver_bytes_received();    // bytes buffered so far
 size_t      webserver_upload_total();      // total expected (Content-Length)
 const char *webserver_upload_name();       // filename currently being uploaded

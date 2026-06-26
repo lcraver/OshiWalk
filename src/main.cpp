@@ -138,27 +138,50 @@ void setup() {
 void loop() {
     // ── Upload overlay + filesystem flush ─────────────────────────────────────
     static bool gifClosedForUpload = false;
-    bool uploading = webserver_upload_in_progress();
+    bool uploading   = webserver_upload_in_progress();
+    bool sdUploading = webserver_sd_upload_in_progress();
+    bool anyUploading = uploading || sdUploading;
 
-    if (uploading && !gifClosedForUpload) {
+    if (anyUploading && !gifClosedForUpload) {
         pages[2]->onLeave();
         gifClosedForUpload = true;
     }
 
     // Refresh the receiving overlay every 200 ms so progress is visible
-    if (uploading) {
+    if (anyUploading) {
         static unsigned long lastOverlayMs = 0;
         unsigned long now = millis();
         if (now - lastOverlayMs >= 200) {
             lastOverlayMs = now;
-            drawUploadOverlay("Receiving...",
-                              webserver_bytes_received(),
-                              webserver_upload_total(),
-                              webserver_upload_name());
+            if (sdUploading)
+                drawUploadOverlay("Receiving (SD)...",
+                                  webserver_sd_bytes_received(),
+                                  webserver_sd_upload_total(),
+                                  webserver_sd_upload_name());
+            else
+                drawUploadOverlay("Receiving...",
+                                  webserver_bytes_received(),
+                                  webserver_upload_total(),
+                                  webserver_upload_name());
         }
     }
 
-    // Write buffered upload to FS from this task — passes progress callback
+    // SD upload: wifi task does the write — just wait for it to finish then rescan
+    static bool sdUploadWasDone = false;
+    if (sdUploadWasDone && !sdUploading) {
+        sdUploadWasDone   = false;
+        gifClosedForUpload = false;
+        drawUploadOverlay("Done!", 1, 1, "");
+        delay(800);
+        static_cast<GifPage *>(pages[2])->rescan();
+        pages[currentPage]->onLeave();
+        currentPage = 2;
+        static_cast<GifPage *>(pages[2])->draw();
+        return;
+    }
+    if (sdUploading) sdUploadWasDone = true;
+
+    // Write buffered LittleFS upload to FS from this task — passes progress callback
     // so the overlay updates as each chunk is written.
     if (webserver_flush_upload(onUploadProgress)) {
         gifClosedForUpload = false;
@@ -187,11 +210,11 @@ void loop() {
     streetpass_tick();
 
     // Active page tick — skip while uploading
-    if (!uploading)
+    if (!anyUploading)
         pages[currentPage]->tick();
 
     // Rescan triggered by delete (upload rescan is handled above)
-    if (!uploading && webserver_pending_rescan()) {
+    if (!anyUploading && webserver_pending_rescan()) {
         static_cast<GifPage *>(pages[2])->rescan();
         if (currentPage != 2) pages[currentPage]->draw();
     }
