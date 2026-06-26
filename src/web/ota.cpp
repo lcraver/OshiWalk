@@ -86,7 +86,9 @@ void ota_check(TFT_eSPI &tft) {
     Serial.printf("[OTA] local=%d  remote=%d\n", BUILD_NUMBER, remoteBuild);
 
     if (remoteBuild <= BUILD_NUMBER) {
-        otaSplash("Up to date", "v1." + String(BUILD_NUMBER), TFT_GREEN, TFT_DARKGREY);
+        char upBuf[16];
+        snprintf(upBuf, sizeof(upBuf), "v1.%d", BUILD_NUMBER);
+        otaSplash("Up to date", upBuf, TFT_GREEN, TFT_DARKGREY);
         delay(2000);
         return;
     }
