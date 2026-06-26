@@ -1,7 +1,6 @@
 #include "pages/SettingsPage.h"
 #include "web/wifi_manager.h"
 #include "web/webserver.h"
-#include "web/ota.h"
 #include "version.h"
 
 #include <WiFi.h>
@@ -94,37 +93,49 @@ void SettingsPage::drawMain() {
         tft.drawString("Not connected", 10, 42);
     }
 
-    tft.drawFastHLine(0, 64, 240, 0x2104);
+    // ── Web server toggle ────────────────────────────────────────────────────
+    if (s_webStarted) {
+        tft.setTextColor(0x07E0, TFT_BLACK); // green
+        tft.drawString("Web UI: " + wifi_ip(), 10, 63);
+    } else {
+        tft.fillRoundRect(8, 56, 224, 22, 4, 0x0C25);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(TFT_WHITE, 0x0C25);
+        tft.drawString("Start Web Server", 120, 67);
+        tft.setTextDatum(ML_DATUM);
+    }
+
+    tft.drawFastHLine(0, 83, 240, 0x2104);
 
     // ── SSID field ───────────────────────────────────────────────────────────
     tft.setTextColor(0x8410, TFT_BLACK);
-    tft.drawString("SSID", 10, 74);
-    tft.drawRoundRect(8, 82, 224, 24, 3, 0x4208);
+    tft.drawString("SSID", 10, 93);
+    tft.drawRoundRect(8, 101, 224, 24, 3, 0x4208);
     if (ssid.length()) {
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
         String shown = ssid;
         if (shown.length() > 30) shown = shown.substring(shown.length()-30);
-        tft.drawString(shown.c_str(), 14, 94);
+        tft.drawString(shown.c_str(), 14, 113);
     }
 
     // ── Password field ───────────────────────────────────────────────────────
     tft.setTextColor(0x8410, TFT_BLACK);
-    tft.drawString("Password", 10, 115);
-    tft.drawRoundRect(8, 123, 224, 24, 3, 0x4208);
+    tft.drawString("Password", 10, 134);
+    tft.drawRoundRect(8, 142, 224, 24, 3, 0x4208);
     if (passwd.length()) {
         String stars;
         for (size_t i = 0; i < passwd.length(); i++) stars += '*';
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        tft.drawString(stars.c_str(), 14, 135);
+        tft.drawString(stars.c_str(), 14, 154);
     }
 
     // ── Connect button ───────────────────────────────────────────────────────
-    tft.fillRoundRect(8, 155, 224, 26, 4, 0x0340);
+    tft.fillRoundRect(8, 174, 224, 26, 4, 0x0340);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TFT_WHITE, 0x0340);
-    tft.drawString("Save & Connect", 120, 168);
+    tft.drawString("Save & Connect", 120, 187);
 
-    tft.drawFastHLine(0, 189, 240, 0x2104);
+    tft.drawFastHLine(0, 208, 240, 0x2104);
 
     // ── Device storage ───────────────────────────────────────────────────────
     uint32_t lfsUsed  = LittleFS.usedBytes();
@@ -133,12 +144,12 @@ void SettingsPage::drawMain() {
 
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(0x8410, TFT_BLACK);
-    tft.drawString("Device", 10, 197);
+    tft.drawString("Device", 10, 216);
 
-    drawStorageBar(tft, 8, 206, 224, 10, lfsUsed, lfsTotal);
+    drawStorageBar(tft, 8, 225, 224, 10, lfsUsed, lfsTotal);
 
     tft.setTextColor(0x6B4D, TFT_BLACK);
-    tft.drawString((humanBytes(lfsFree) + " free / " + humanBytes(lfsTotal)).c_str(), 10, 220);
+    tft.drawString((humanBytes(lfsFree) + " free / " + humanBytes(lfsTotal)).c_str(), 10, 239);
 
     // ── SD card ──────────────────────────────────────────────────────────────
     bool sdMnt = webserver_sd_mounted();
@@ -150,22 +161,22 @@ void SettingsPage::drawMain() {
 
     tft.setTextColor(0x8410, TFT_BLACK);
     tft.setTextDatum(ML_DATUM);
-    tft.drawString("SD Card", 10, 234);
+    tft.drawString("SD Card", 10, 253);
 
     // Raw diagnostic line so the state is always visible
     char diagBuf[48];
     snprintf(diagBuf, sizeof(diagBuf), "type:%s  mnt:%d  prs:%d",
              typeName, sdMnt ? 1 : 0, sdPrs ? 1 : 0);
     tft.setTextColor(0x4A69, TFT_BLACK); // dim blue-grey
-    tft.drawString(diagBuf, 10, 245);
+    tft.drawString(diagBuf, 10, 264);
 
     if (!sdMnt) {
         tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-        tft.drawString("Not mounted — tap to format", 10, 258);
-        tft.fillRoundRect(8, 268, 224, 26, 4, 0x6320);
+        tft.drawString("Not mounted — tap to format", 10, 277);
+        tft.fillRoundRect(8, 287, 224, 26, 4, 0x6320);
         tft.setTextDatum(MC_DATUM);
         tft.setTextColor(TFT_WHITE, 0x6320);
-        tft.drawString("Format SD Card", 120, 281);
+        tft.drawString("Format SD Card", 120, 300);
     } else {
         uint32_t sdTotal = (uint32_t)(SD_MMC.totalBytes() / 1024 / 1024);
         tft.setTextColor(TFT_GREEN, TFT_BLACK);
@@ -324,15 +335,22 @@ char SettingsPage::kbHit(int16_t tx, int16_t ty) {
 // ── tap handlers ──────────────────────────────────────────────────────────────
 
 void SettingsPage::handleMainTap(int16_t x, int16_t y) {
+    // Start Web Server button
+    if (!s_webStarted && y >= 56 && y < 78) {
+        s_webStarted = true;
+        webserver_init();
+        drawMain();
+        return;
+    }
     // SSID field
-    if (y >= 82 && y < 107) {
+    if (y >= 101 && y < 126) {
         mode = Mode::KB_SSID;
         shifted = false; numMode = false;
         drawKeyboard();
         return;
     }
     // Password field
-    if (y >= 123 && y < 148) {
+    if (y >= 142 && y < 167) {
         mode = Mode::KB_PASS;
         passwd = "";  // always start fresh for password entry
         shifted = false; numMode = false;
@@ -340,18 +358,18 @@ void SettingsPage::handleMainTap(int16_t x, int16_t y) {
         return;
     }
     // Save & Connect button
-    if (y >= 155 && y < 181) {
-        tft.fillRoundRect(8, 155, 224, 26, 4, 0x0240);
+    if (y >= 174 && y < 200) {
+        tft.fillRoundRect(8, 174, 224, 26, 4, 0x0240);
         tft.setTextDatum(MC_DATUM);
         tft.setTextColor(TFT_WHITE, 0x0240);
-        tft.drawString("Saving...", 120, 168);
+        tft.drawString("Saving...", 120, 187);
         wifi_save_credentials(ssid, passwd);
         delay(300);
         ESP.restart();
         return;
     }
     // Format SD button (shown whenever not mounted)
-    if (!webserver_sd_mounted() && y >= 268 && y < 294) {
+    if (!webserver_sd_mounted() && y >= 287 && y < 313) {
         mode = Mode::CONFIRM_FMT;
         drawConfirmFmt();
         return;
@@ -390,13 +408,6 @@ void SettingsPage::handleKbTap(int16_t x, int16_t y) {
 // ── Page interface ────────────────────────────────────────────────────────────
 
 void SettingsPage::draw() {
-    if (!s_webStarted) {
-        s_webStarted = true;
-        wifi_init(tft);
-        if (!wifi_is_ap_mode()) ota_check(tft);
-        webserver_init();
-        ssid = wifi_get_ssid(); // refresh now that WiFi is up
-    }
     switch (mode) {
         case Mode::MAIN:        drawMain();        break;
         case Mode::KB_SSID:
