@@ -122,7 +122,7 @@ void setup() {
     tft.drawString("ProxiOshi", 120, 152);
     tft.setTextSize(1);
     tft.setTextColor(0x4208, TFT_BLACK);
-    tft.drawString("Booting up...", 120, 174);
+    tft.drawString("Booting... please wait", 120, 174);
 
     streetpass_init();
 
