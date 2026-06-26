@@ -58,10 +58,11 @@ static void drawStorageBar(TFT_eSPI &tft, int x, int y, int w, int h,
     }
 }
 
-static String humanBytes(uint32_t b) {
-    if (b >= 1024*1024) return String(b/1024/1024) + "MB";
-    if (b >= 1024)      return String(b/1024) + "KB";
-    return String(b) + "B";
+static String humanBytes(uint64_t b) {
+    if (b >= (uint64_t)1024*1024*1024) return String((uint32_t)(b/1024/1024/1024)) + "GB";
+    if (b >= 1024*1024) return String((uint32_t)(b/1024/1024)) + "MB";
+    if (b >= 1024)      return String((uint32_t)(b/1024)) + "KB";
+    return String((uint32_t)b) + "B";
 }
 
 // ── construction ──────────────────────────────────────────────────────────────
@@ -147,12 +148,19 @@ void SettingsPage::drawMain() {
         tft.drawString("Not mounted — tap to format", 10, 204);
         drawBtn(tft, 214, "Format SD Card", 0x6320, TFT_WHITE);
     } else {
-        uint32_t sdUsed  = (uint32_t)(SD_MMC.usedBytes()  / 1024);
-        uint32_t sdTotal = (uint32_t)(SD_MMC.totalBytes() / 1024);
-        uint32_t sdFree  = sdTotal > sdUsed ? sdTotal - sdUsed : 0;
-        drawStorageBar(tft, 8, 202, 224, 10, sdUsed, sdTotal);
+        uint64_t sdTotalBytes = SD_MMC.totalBytes();
+        uint64_t sdUsedBytes  = SD_MMC.usedBytes();
+        // scale to KB for bar to avoid uint32 overflow on large cards
+        uint32_t sdTotalKB = (uint32_t)(sdTotalBytes / 1024);
+        uint32_t sdUsedKB  = (sdUsedBytes > 0 && sdUsedBytes < sdTotalBytes)
+                             ? (uint32_t)(sdUsedBytes / 1024) : 0;
+        drawStorageBar(tft, 8, 202, 224, 10, sdUsedKB, sdTotalKB);
         tft.setTextColor(0x6B4D, TFT_BLACK);
-        tft.drawString((humanBytes(sdFree) + " free / " + humanBytes(sdTotal)).c_str(), 10, 216);
+        if (sdUsedKB > 0) {
+            tft.drawString((humanBytes(sdTotalBytes - sdUsedBytes) + " free / " + humanBytes(sdTotalBytes)).c_str(), 10, 216);
+        } else {
+            tft.drawString((humanBytes(sdTotalBytes) + " total capacity").c_str(), 10, 216);
+        }
     }
 
     drawDotsAndVersion();
