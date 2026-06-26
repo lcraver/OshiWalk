@@ -10,6 +10,9 @@
 
 using fs::File;
 
+extern const char _binary_data_index_html_start[];
+extern const char _binary_data_index_html_end[];
+
 static AsyncWebServer server(80);
 static File           s_sdUploadFile;
 static volatile bool  s_pendingRescan    = false;
@@ -94,13 +97,13 @@ void webserver_init() {
     if (!s_uploadBuf)
         Serial.println("webserver: WARNING — failed to allocate upload buffer in PSRAM");
 
-    // ── index page (served from LittleFS) ────────────────────────────────────
+    // ── index page (embedded in firmware) ────────────────────────────────────
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-        if (LittleFS.exists("/index.html"))
-            req->send(LittleFS, "/index.html", "text/html");
-        else
-            req->send(503, "text/plain",
-                      "UI not found. Flash the filesystem: pio run -t uploadfs");
+        size_t len = _binary_data_index_html_end - _binary_data_index_html_start;
+        AsyncWebServerResponse *res = req->beginResponse_P(
+            200, "text/html",
+            (const uint8_t *)_binary_data_index_html_start, len);
+        req->send(res);
     });
 
     // ── API: info ─────────────────────────────────────────────────────────────

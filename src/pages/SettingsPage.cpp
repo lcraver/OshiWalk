@@ -1,6 +1,7 @@
 #include "pages/SettingsPage.h"
 #include "web/wifi_manager.h"
 #include "web/webserver.h"
+#include "web/ota.h"
 #include "version.h"
 
 #include <WiFi.h>
@@ -58,6 +59,8 @@ static String humanBytes(uint32_t b) {
 }
 
 // ── construction ──────────────────────────────────────────────────────────────
+
+bool SettingsPage::s_webStarted = false;
 
 SettingsPage::SettingsPage(TFT_eSPI &tft) : Page(tft, 3) {
     ssid = wifi_get_ssid();
@@ -387,6 +390,13 @@ void SettingsPage::handleKbTap(int16_t x, int16_t y) {
 // ── Page interface ────────────────────────────────────────────────────────────
 
 void SettingsPage::draw() {
+    if (!s_webStarted) {
+        s_webStarted = true;
+        wifi_init(tft);
+        if (!wifi_is_ap_mode()) ota_check(tft);
+        webserver_init();
+        ssid = wifi_get_ssid(); // refresh now that WiFi is up
+    }
     switch (mode) {
         case Mode::MAIN:        drawMain();        break;
         case Mode::KB_SSID:

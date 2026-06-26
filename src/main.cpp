@@ -8,9 +8,7 @@
 #include "pins.h"
 #include "data.h"
 #include "streetpass.h"
-#include "web/wifi_manager.h"
 #include "web/webserver.h"
-#include "web/ota.h"
 #include "pages/Page.h"
 #include "pages/AvatarPage.h"
 #include "pages/StreetPassPage.h"
@@ -113,9 +111,6 @@ void setup() {
     tft.setSwapBytes(true);
 
     streetpass_init();
-    wifi_init(tft);
-    if (!wifi_is_ap_mode()) ota_check(tft);
-    webserver_init();
 
     pages[0] = new AvatarPage(tft);
     pages[1] = new StreetPassPage(tft);

@@ -14,6 +14,7 @@ private:
     bool   numMode  = false;
     bool   cursorOn = false;
     unsigned long lastBlink = 0;
+    static bool s_webStarted;
 
     void drawMain();
     void drawKeyboard();
