@@ -15,15 +15,20 @@
 static TFT_eSPI *s_tft = nullptr;
 
 static void otaSplash(const char *line1, const char *line2,
-                      uint16_t col1, uint16_t col2) {
+                      uint16_t col1, uint16_t col2,
+                      const char *detail = nullptr) {
     s_tft->fillScreen(TFT_BLACK);
     s_tft->setTextDatum(MC_DATUM);
     s_tft->setTextSize(2);
     s_tft->setTextColor(col1, TFT_BLACK);
-    s_tft->drawString(line1, 120, 120);
+    s_tft->drawString(line1, 120, 110);
     s_tft->setTextSize(1);
     s_tft->setTextColor(col2, TFT_BLACK);
-    s_tft->drawString(line2, 120, 152);
+    s_tft->drawString(line2, 120, 142);
+    if (detail && detail[0]) {
+        s_tft->setTextColor(TFT_ORANGE, TFT_BLACK);
+        s_tft->drawString(detail, 120, 162);
+    }
 }
 
 static void otaProgress(int cur, int total) {
@@ -62,21 +67,60 @@ void ota_check(TFT_eSPI &tft) {
 
     int code = http.GET();
     if (code != 200) {
+        char detail[32];
+        snprintf(detail, sizeof(detail), "HTTP %d", code);
         Serial.printf("[OTA] manifest fetch failed: %d\n", code);
         http.end();
-        otaSplash("Update check", "failed", TFT_RED, TFT_DARKGREY);
-        delay(2000);
+        otaSplash("Update check failed", "manifest fetch error", TFT_RED, TFT_DARKGREY, detail);
+        delay(4000);
         return;
     }
 
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getString());
+    String body = http.getString();
     http.end();
+    Serial.printf("[OTA] manifest: %s\n", body.c_str());
+
+    // Strip UTF-8 BOM if present (causes InvalidInput in ArduinoJson)
+    if (body.length() >= 3 &&
+        (uint8_t)body[0] == 0xEF &&
+        (uint8_t)body[1] == 0xBB &&
+        (uint8_t)body[2] == 0xBF) {
+        body.remove(0, 3);
+    }
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, body);
 
     if (err) {
         Serial.printf("[OTA] JSON parse error: %s\n", err.c_str());
-        otaSplash("Update check", "failed", TFT_RED, TFT_DARKGREY);
-        delay(2000);
+
+        // Show error + body snippet on screen for diagnosis
+        char line2[32];
+        snprintf(line2, sizeof(line2), "JSON err: %s", err.c_str());
+
+        char detail[40];
+        int blen = body.length();
+        if (blen == 0) {
+            snprintf(detail, sizeof(detail), "body empty");
+        } else {
+            // Show length + first 20 chars
+            char snippet[21];
+            strncpy(snippet, body.c_str(), 20);
+            snippet[20] = '\0';
+            snprintf(detail, sizeof(detail), "len=%d [%s]", blen, snippet);
+        }
+
+        s_tft->fillScreen(TFT_BLACK);
+        s_tft->setTextDatum(TL_DATUM);
+        s_tft->setTextSize(1);
+        s_tft->setTextColor(TFT_RED, TFT_BLACK);
+        s_tft->drawString("bad manifest JSON", 4, 10);
+        s_tft->setTextColor(TFT_YELLOW, TFT_BLACK);
+        s_tft->drawString(line2, 4, 30);
+        s_tft->setTextColor(TFT_WHITE, TFT_BLACK);
+        s_tft->drawString(detail, 4, 50);
+
+        delay(8000);
         return;
     }
 

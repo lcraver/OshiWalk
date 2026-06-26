@@ -1,3 +1,3 @@
 #pragma once
-#define BUILD_NUMBER 59
-#define VERSION_STR  "v1.59"
+#define BUILD_NUMBER 61
+#define VERSION_STR  "v1.61"
