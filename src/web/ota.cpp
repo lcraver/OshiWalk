@@ -80,14 +80,6 @@ void ota_check(TFT_eSPI &tft) {
     http.end();
     Serial.printf("[OTA] manifest: %s\n", body.c_str());
 
-    // Strip UTF-8 BOM if present (causes InvalidInput in ArduinoJson)
-    if (body.length() >= 3 &&
-        (uint8_t)body[0] == 0xEF &&
-        (uint8_t)body[1] == 0xBB &&
-        (uint8_t)body[2] == 0xBF) {
-        body.remove(0, 3);
-    }
-
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, body);
 
