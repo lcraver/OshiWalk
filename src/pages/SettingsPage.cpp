@@ -1,6 +1,7 @@
 #include "pages/SettingsPage.h"
 #include "web/wifi_manager.h"
 #include "web/webserver.h"
+#include "web/ota.h"
 #include "version.h"
 
 #include <WiFi.h>
@@ -21,14 +22,11 @@ static const int KB_Y[] = { 47, 110, 173, 236 };
 static const int KEY_H  = 60;
 static const int KEY_W  = 24;
 
-// Letter rows: lower, upper, numeric
 static const char *RL[] = { "qwertyuiop", "asdfghjkl", "zxcvbnm" };
 static const char *RU[] = { "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" };
 static const char *RN[] = { "1234567890", "@#$%&*-()", ".,!?_/:" };
-//                row 1 nums is 9 chars (same centred rendering as letter row 1)
-//                row 2 nums is 7 chars (same layout as letter row 2)
 
-// ── module-level draw helpers ─────────────────────────────────────────────────
+// ── draw helpers ──────────────────────────────────────────────────────────────
 
 static void drawKey(TFT_eSPI &tft, int x, int y, int w,
                     const char *lbl, uint16_t bg = 0x2104, uint16_t fg = TFT_WHITE) {
@@ -39,14 +37,23 @@ static void drawKey(TFT_eSPI &tft, int x, int y, int w,
     tft.drawString(lbl, x + w/2, y + KEY_H/2);
 }
 
+static void drawBtn(TFT_eSPI &tft, int y, const char *lbl,
+                    uint16_t bg = 0x2104, uint16_t fg = TFT_WHITE) {
+    tft.fillRoundRect(8, y, 224, 26, 4, bg);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(fg, bg);
+    tft.setTextSize(1);
+    tft.drawString(lbl, 120, y + 13);
+}
+
 static void drawStorageBar(TFT_eSPI &tft, int x, int y, int w, int h,
                            uint32_t used, uint32_t total) {
     tft.drawRoundRect(x, y, w, h, 2, 0x4208);
     if (total > 0 && used <= total) {
         int fill = (int)((long long)used * (w-2) / total);
-        uint16_t col = 0x0540;  // green
-        if (used > total * 8 / 10) col = 0xC520;  // amber
-        if (used > total * 9 / 10) col = 0xA800;  // red
+        uint16_t col = 0x0540;
+        if (used > total * 8 / 10) col = 0xC520;
+        if (used > total * 9 / 10) col = 0xA800;
         if (fill > 0) tft.fillRect(x+1, y+1, fill, h-2, col);
     }
 }
@@ -66,76 +73,48 @@ SettingsPage::SettingsPage(TFT_eSPI &tft) : Page(tft, 3) {
 }
 
 // ── main view ─────────────────────────────────────────────────────────────────
+//
+//  Title bar        y =   0 .. 30
+//  WiFi status      y =  36 .. 44
+//  [Web Server]     y =  50 .. 76
+//  [WiFi Settings]  y =  82 .. 108
+//  [Check Updates]  y = 114 .. 140
+//  divider          y = 148
+//  Device storage   y = 154 .. 178
+//  SD card          y = 184 .. 310
 
 void SettingsPage::drawMain() {
     tft.fillScreen(TFT_BLACK);
     drawTitleBar("Settings", 0x2945);
 
-    // ── WiFi status ──────────────────────────────────────────────────────────
+    // ── WiFi status (compact single line) ────────────────────────────────────
     tft.setTextSize(1);
     tft.setTextDatum(ML_DATUM);
-
     bool connected = (WiFi.status() == WL_CONNECTED);
     bool apMode    = wifi_is_ap_mode();
 
     if (connected) {
         tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        tft.drawString("Connected", 10, 42);
-        tft.setTextColor(0x8410, TFT_BLACK);
-        tft.drawString(WiFi.localIP().toString().c_str(), 10, 55);
+        tft.drawString(("Connected  " + WiFi.localIP().toString()).c_str(), 10, 40);
     } else if (apMode) {
         tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-        tft.drawString("AP: ProxiOshi", 10, 42);
-        tft.setTextColor(0x8410, TFT_BLACK);
-        tft.drawString(wifi_ip().c_str(), 10, 55);
+        tft.drawString(("AP: ProxiOshi  " + wifi_ip()).c_str(), 10, 40);
     } else {
         tft.setTextColor(TFT_RED, TFT_BLACK);
-        tft.drawString("Not connected", 10, 42);
+        tft.drawString("Not connected", 10, 40);
     }
 
-    // ── Web server toggle ────────────────────────────────────────────────────
+    // ── Buttons ──────────────────────────────────────────────────────────────
     if (s_webStarted) {
-        tft.setTextColor(0x07E0, TFT_BLACK); // green
-        tft.drawString("Web UI: " + wifi_ip(), 10, 63);
+        drawBtn(tft, 50, ("Web UI: " + wifi_ip()).c_str(), 0x0282, TFT_WHITE);
     } else {
-        tft.fillRoundRect(8, 56, 224, 22, 4, 0x0C25);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE, 0x0C25);
-        tft.drawString("Start Web Server", 120, 67);
-        tft.setTextDatum(ML_DATUM);
+        drawBtn(tft, 50, "Start Web Server", 0x0C25, TFT_WHITE);
     }
 
-    tft.drawFastHLine(0, 83, 240, 0x2104);
+    drawBtn(tft,  82, "WiFi Settings  >", 0x2104, TFT_WHITE);
+    drawBtn(tft, 114, "Check for Updates", 0x2104, TFT_WHITE);
 
-    // ── SSID field ───────────────────────────────────────────────────────────
-    tft.setTextColor(0x8410, TFT_BLACK);
-    tft.drawString("SSID", 10, 93);
-    tft.drawRoundRect(8, 101, 224, 24, 3, 0x4208);
-    if (ssid.length()) {
-        tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        String shown = ssid;
-        if (shown.length() > 30) shown = shown.substring(shown.length()-30);
-        tft.drawString(shown.c_str(), 14, 113);
-    }
-
-    // ── Password field ───────────────────────────────────────────────────────
-    tft.setTextColor(0x8410, TFT_BLACK);
-    tft.drawString("Password", 10, 134);
-    tft.drawRoundRect(8, 142, 224, 24, 3, 0x4208);
-    if (passwd.length()) {
-        String stars;
-        for (size_t i = 0; i < passwd.length(); i++) stars += '*';
-        tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        tft.drawString(stars.c_str(), 14, 154);
-    }
-
-    // ── Connect button ───────────────────────────────────────────────────────
-    tft.fillRoundRect(8, 174, 224, 26, 4, 0x0340);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, 0x0340);
-    tft.drawString("Save & Connect", 120, 187);
-
-    tft.drawFastHLine(0, 208, 240, 0x2104);
+    tft.drawFastHLine(0, 148, 240, 0x2104);
 
     // ── Device storage ───────────────────────────────────────────────────────
     uint32_t lfsUsed  = LittleFS.usedBytes();
@@ -144,45 +123,87 @@ void SettingsPage::drawMain() {
 
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(0x8410, TFT_BLACK);
-    tft.drawString("Device", 10, 216);
-
-    drawStorageBar(tft, 8, 225, 224, 10, lfsUsed, lfsTotal);
-
+    tft.drawString("Device", 10, 156);
+    drawStorageBar(tft, 8, 165, 224, 10, lfsUsed, lfsTotal);
     tft.setTextColor(0x6B4D, TFT_BLACK);
-    tft.drawString((humanBytes(lfsFree) + " free / " + humanBytes(lfsTotal)).c_str(), 10, 239);
+    tft.drawString((humanBytes(lfsFree) + " free / " + humanBytes(lfsTotal)).c_str(), 10, 179);
 
     // ── SD card ──────────────────────────────────────────────────────────────
     bool sdMnt = webserver_sd_mounted();
     bool sdPrs = webserver_sd_present();
     uint8_t cardType = SD_MMC.cardType();
-
     static const char *cardNames[] = { "NONE", "MMC", "SD", "SDHC", "UNKN" };
     const char *typeName = (cardType <= 4) ? cardNames[cardType] : "?";
 
     tft.setTextColor(0x8410, TFT_BLACK);
-    tft.setTextDatum(ML_DATUM);
-    tft.drawString("SD Card", 10, 253);
+    tft.drawString("SD Card", 10, 193);
 
-    // Raw diagnostic line so the state is always visible
     char diagBuf[48];
     snprintf(diagBuf, sizeof(diagBuf), "type:%s  mnt:%d  prs:%d",
              typeName, sdMnt ? 1 : 0, sdPrs ? 1 : 0);
-    tft.setTextColor(0x4A69, TFT_BLACK); // dim blue-grey
-    tft.drawString(diagBuf, 10, 264);
+    tft.setTextColor(0x4A69, TFT_BLACK);
+    tft.drawString(diagBuf, 10, 204);
 
     if (!sdMnt) {
         tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-        tft.drawString("Not mounted — tap to format", 10, 277);
-        tft.fillRoundRect(8, 287, 224, 26, 4, 0x6320);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE, 0x6320);
-        tft.drawString("Format SD Card", 120, 300);
+        tft.drawString("Not mounted — tap to format", 10, 218);
+        drawBtn(tft, 228, "Format SD Card", 0x6320, TFT_WHITE);
     } else {
         uint32_t sdTotal = (uint32_t)(SD_MMC.totalBytes() / 1024 / 1024);
         tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        tft.setTextDatum(ML_DATUM);
-        tft.drawString((String(sdTotal) + " MB total").c_str(), 10, 258);
+        tft.drawString((String(sdTotal) + " MB total").c_str(), 10, 218);
     }
+
+    drawDotsAndVersion();
+}
+
+// ── wifi settings sub-page ────────────────────────────────────────────────────
+//
+//  "< Back" / title  y =   0 .. 30
+//  SSID label        y =  40
+//  SSID box          y =  48 .. 72
+//  Password label    y =  82
+//  Password box      y =  90 .. 114
+//  [Save & Connect]  y = 130 .. 156
+
+void SettingsPage::drawWifiSettings() {
+    tft.fillScreen(TFT_BLACK);
+
+    // Title bar with back arrow
+    tft.fillRect(0, 0, 240, 30, 0x2945);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(TFT_WHITE, 0x2945);
+    tft.setTextSize(1);
+    tft.drawString("< Back", 8, 15);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString("WiFi Settings", 120, 15);
+
+    tft.setTextDatum(ML_DATUM);
+
+    // ── SSID field ───────────────────────────────────────────────────────────
+    tft.setTextColor(0x8410, TFT_BLACK);
+    tft.drawString("SSID", 10, 40);
+    tft.drawRoundRect(8, 48, 224, 24, 3, 0x4208);
+    if (ssid.length()) {
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        String shown = ssid;
+        if (shown.length() > 30) shown = shown.substring(shown.length()-30);
+        tft.drawString(shown.c_str(), 14, 60);
+    }
+
+    // ── Password field ───────────────────────────────────────────────────────
+    tft.setTextColor(0x8410, TFT_BLACK);
+    tft.drawString("Password", 10, 82);
+    tft.drawRoundRect(8, 90, 224, 24, 3, 0x4208);
+    if (passwd.length()) {
+        String stars;
+        for (size_t i = 0; i < passwd.length(); i++) stars += '*';
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        tft.drawString(stars.c_str(), 14, 102);
+    }
+
+    // ── Save & Connect ───────────────────────────────────────────────────────
+    drawBtn(tft, 130, "Save & Connect", 0x0340, TFT_WHITE);
 
     drawDotsAndVersion();
 }
@@ -208,8 +229,6 @@ void SettingsPage::drawKbInput() {
         shown = field;
 
     shown += cursorOn ? '_' : ' ';
-
-    // Clip to last ~36 chars so it doesn't overflow
     if ((int)shown.length() > 36) shown = shown.substring(shown.length()-36);
 
     tft.setTextColor(TFT_WHITE, 0x0841);
@@ -224,19 +243,16 @@ void SettingsPage::drawKeyboard() {
 
     const char **rows = numMode ? RN : (shifted ? RU : RL);
 
-    // Row 0: 10 keys full width
     for (int i = 0; i < 10; i++) {
         char buf[2] = { rows[0][i], 0 };
         drawKey(tft, i*KEY_W, KB_Y[0], KEY_W, buf);
     }
 
-    // Row 1: 9 keys centred (letter) or 9 keys full-width (num)
     if (numMode) {
         for (int i = 0; i < 9; i++) {
             char buf[2] = { RN[1][i], 0 };
             drawKey(tft, i*KEY_W, KB_Y[1], KEY_W, buf);
         }
-        // fill the gap of 24px on the right with nothing (already black)
     } else {
         for (int i = 0; i < 9; i++) {
             char buf[2] = { rows[1][i], 0 };
@@ -244,13 +260,11 @@ void SettingsPage::drawKeyboard() {
         }
     }
 
-    // Row 2: [Shft/Sym] [7 chars] [Del]
     {
         const char *shiftLbl = numMode ? "Sym" : (shifted ? "shft" : "Shft");
         uint16_t shiftBg = (!numMode && shifted) ? 0x528A : 0x2104;
         drawKey(tft, 0, KB_Y[2], 36, shiftLbl, shiftBg);
-
-        int n = strlen(rows[2]);  // 7 for both letters and nums row 2
+        int n = strlen(rows[2]);
         for (int i = 0; i < n; i++) {
             char buf[2] = { rows[2][i], 0 };
             drawKey(tft, 36 + i*KEY_W, KB_Y[2], KEY_W, buf);
@@ -258,7 +272,6 @@ void SettingsPage::drawKeyboard() {
         drawKey(tft, 204, KB_Y[2], 36, "Del", 0x3000);
     }
 
-    // Row 3: [toggle] [space] [done]
     drawKey(tft,   0, KB_Y[3],  48, numMode ? "abc" : "123");
     drawKey(tft,  48, KB_Y[3], 144, "space", 0x1082);
     drawKey(tft, 192, KB_Y[3],  48, "Done", 0x0340);
@@ -281,12 +294,10 @@ void SettingsPage::drawConfirmFmt() {
     tft.drawString("This erases all data on", 120, 125);
     tft.drawString("the SD card.", 120, 140);
 
-    // Format button (left, red-ish)
     tft.fillRoundRect(18, 170, 90, 34, 6, 0x8000);
     tft.setTextColor(TFT_WHITE, 0x8000);
     tft.drawString("Format", 63, 187);
 
-    // Cancel button (right, neutral)
     tft.fillRoundRect(132, 170, 90, 34, 6, 0x2104);
     tft.setTextColor(TFT_WHITE, 0x2104);
     tft.drawString("Cancel", 177, 187);
@@ -305,15 +316,14 @@ char SettingsPage::kbHit(int16_t tx, int16_t ty) {
     const char **rows = numMode ? RN : (shifted ? RU : RL);
 
     if (row == 3) {
-        if (tx < 48)  return '\x01';  // toggle 123/abc
+        if (tx < 48)  return '\x01';
         if (tx < 192) return ' ';
-        return '\n';                   // Done
+        return '\n';
     }
     if (row == 0) {
         int i = tx / KEY_W;
         if (i >= 0 && i < 10) return rows[0][i];
-    }
-    else if (row == 1) {
+    } else if (row == 1) {
         if (numMode) {
             int i = tx / KEY_W;
             if (i >= 0 && i < 9) return RN[1][i];
@@ -321,10 +331,9 @@ char SettingsPage::kbHit(int16_t tx, int16_t ty) {
             int i = (tx - 12) / KEY_W;
             if (i >= 0 && i < 9) return rows[1][i];
         }
-    }
-    else if (row == 2) {
-        if (tx < 36)   return '\x02';  // shift
-        if (tx >= 204) return '\x08';  // backspace
+    } else if (row == 2) {
+        if (tx < 36)   return '\x02';
+        if (tx >= 204) return '\x08';
         int i = (tx - 36) / KEY_W;
         int n = strlen(rows[2]);
         if (i >= 0 && i < n) return rows[2][i];
@@ -335,44 +344,63 @@ char SettingsPage::kbHit(int16_t tx, int16_t ty) {
 // ── tap handlers ──────────────────────────────────────────────────────────────
 
 void SettingsPage::handleMainTap(int16_t x, int16_t y) {
-    // Start Web Server button
-    if (!s_webStarted && y >= 56 && y < 78) {
-        s_webStarted = true;
-        webserver_init();
+    // Web server button
+    if (y >= 50 && y < 76) {
+        if (!s_webStarted) {
+            s_webStarted = true;
+            webserver_init();
+            drawMain();
+        }
+        return;
+    }
+    // WiFi Settings
+    if (y >= 82 && y < 108) {
+        mode = Mode::WIFI_SETTINGS;
+        drawWifiSettings();
+        return;
+    }
+    // Check for Updates
+    if (y >= 114 && y < 140) {
+        ota_check(tft);
+        drawMain();
+        return;
+    }
+    // Format SD button
+    if (!webserver_sd_mounted() && y >= 228 && y < 254) {
+        mode = Mode::CONFIRM_FMT;
+        drawConfirmFmt();
+        return;
+    }
+}
+
+void SettingsPage::handleWifiSettingsTap(int16_t x, int16_t y) {
+    // Back button (title bar)
+    if (y < 30) {
+        mode = Mode::MAIN;
         drawMain();
         return;
     }
     // SSID field
-    if (y >= 101 && y < 126) {
+    if (y >= 48 && y < 72) {
         mode = Mode::KB_SSID;
         shifted = false; numMode = false;
         drawKeyboard();
         return;
     }
     // Password field
-    if (y >= 142 && y < 167) {
+    if (y >= 90 && y < 114) {
         mode = Mode::KB_PASS;
-        passwd = "";  // always start fresh for password entry
+        passwd = "";
         shifted = false; numMode = false;
         drawKeyboard();
         return;
     }
-    // Save & Connect button
-    if (y >= 174 && y < 200) {
-        tft.fillRoundRect(8, 174, 224, 26, 4, 0x0240);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE, 0x0240);
-        tft.drawString("Saving...", 120, 187);
+    // Save & Connect
+    if (y >= 130 && y < 156) {
+        drawBtn(tft, 130, "Saving...", 0x0240, TFT_WHITE);
         wifi_save_credentials(ssid, passwd);
         delay(300);
         ESP.restart();
-        return;
-    }
-    // Format SD button (shown whenever not mounted)
-    if (!webserver_sd_mounted() && y >= 287 && y < 313) {
-        mode = Mode::CONFIRM_FMT;
-        drawConfirmFmt();
-        return;
     }
 }
 
@@ -381,8 +409,8 @@ void SettingsPage::handleKbTap(int16_t x, int16_t y) {
     String &field = (mode == Mode::KB_PASS) ? passwd : ssid;
 
     if (c == '\n') {
-        mode = Mode::MAIN;
-        draw();
+        mode = Mode::WIFI_SETTINGS;
+        drawWifiSettings();
     } else if (c == '\x08') {
         if (field.length() > 0) field.remove(field.length()-1);
         drawKbInput();
@@ -398,7 +426,6 @@ void SettingsPage::handleKbTap(int16_t x, int16_t y) {
     } else if (c != 0) {
         if (field.length() < 64) {
             field += c;
-            // Auto-release shift after one letter
             if (shifted && !numMode) { shifted = false; drawKeyboard(); }
             else drawKbInput();
         }
@@ -409,10 +436,11 @@ void SettingsPage::handleKbTap(int16_t x, int16_t y) {
 
 void SettingsPage::draw() {
     switch (mode) {
-        case Mode::MAIN:        drawMain();        break;
+        case Mode::MAIN:          drawMain();         break;
+        case Mode::WIFI_SETTINGS: drawWifiSettings(); break;
         case Mode::KB_SSID:
-        case Mode::KB_PASS:     drawKeyboard();    break;
-        case Mode::CONFIRM_FMT: drawConfirmFmt();  break;
+        case Mode::KB_PASS:       drawKeyboard();     break;
+        case Mode::CONFIRM_FMT:   drawConfirmFmt();   break;
     }
 }
 
@@ -431,13 +459,15 @@ void SettingsPage::onTap(int16_t x, int16_t y) {
         case Mode::MAIN:
             handleMainTap(x, y);
             break;
+        case Mode::WIFI_SETTINGS:
+            handleWifiSettingsTap(x, y);
+            break;
         case Mode::KB_SSID:
         case Mode::KB_PASS:
             handleKbTap(x, y);
             break;
         case Mode::CONFIRM_FMT:
             if (x >= 18 && x < 108 && y >= 170 && y < 204) {
-                // Confirmed — format
                 tft.fillScreen(TFT_BLACK);
                 tft.setTextDatum(MC_DATUM);
                 tft.setTextColor(TFT_YELLOW, TFT_BLACK);
@@ -448,11 +478,10 @@ void SettingsPage::onTap(int16_t x, int16_t y) {
                 bool ok = SD_MMC.begin("/sdcard", true, true);
                 webserver_set_sd_state(ok, true);
                 mode = Mode::MAIN;
-                draw();
+                drawMain();
             } else {
-                // Cancelled
                 mode = Mode::MAIN;
-                draw();
+                drawMain();
             }
             break;
     }
