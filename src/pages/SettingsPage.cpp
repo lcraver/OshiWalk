@@ -67,6 +67,13 @@ static String humanBytes(uint32_t b) {
 // ── construction ──────────────────────────────────────────────────────────────
 
 bool SettingsPage::s_webStarted = false;
+static bool s_wifiStarted = false;
+
+static void ensureWifi(TFT_eSPI &tft) {
+    if (s_wifiStarted) return;
+    s_wifiStarted = true;
+    wifi_init(tft);
+}
 
 SettingsPage::SettingsPage(TFT_eSPI &tft) : Page(tft, 3) {
     ssid = wifi_get_ssid();
@@ -84,6 +91,7 @@ SettingsPage::SettingsPage(TFT_eSPI &tft) : Page(tft, 3) {
 //  SD card          y = 184 .. 310
 
 void SettingsPage::drawMain() {
+    ensureWifi(tft);
     tft.fillScreen(TFT_BLACK);
     drawTitleBar("Settings", 0x2945);
 
@@ -361,6 +369,7 @@ void SettingsPage::handleMainTap(int16_t x, int16_t y) {
     }
     // Check for Updates
     if (y >= 114 && y < 140) {
+        ensureWifi(tft);
         ota_check(tft);
         drawMain();
         return;

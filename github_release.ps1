@@ -28,7 +28,7 @@ $json = [ordered]@{
     build = [int]$build
     url   = "https://github.com/lcraver/OshiWalk/releases/latest/download/firmware.bin"
 }
-$json | ConvertTo-Json | Set-Content $jsonFile -Encoding utf8
+[System.IO.File]::WriteAllText($jsonFile, ($json | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
 Write-Host "Updated version.json" -ForegroundColor Cyan
 
 # ── Commit & tag ───────────────────────────────────────────────────────────────
@@ -44,8 +44,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Push failed." -ForegroundColor Red; exit 
 Write-Host "Creating GitHub release $tag..." -ForegroundColor Cyan
 
 $ghArgs = @("release", "create", $tag, $binFile,
-            "--title", $tag,
-            "--asset", "firmware.bin")
+            "--title", $tag)
 if ($Notes -ne "") { $ghArgs += @("--notes", $Notes) }
 else               { $ghArgs += "--generate-notes" }
 

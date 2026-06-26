@@ -8,9 +8,7 @@
 #include "pins.h"
 #include "data.h"
 #include "streetpass.h"
-#include "web/wifi_manager.h"
 #include "web/webserver.h"
-#include "web/ota.h"
 #include "pages/Page.h"
 #include "pages/AvatarPage.h"
 #include "pages/StreetPassPage.h"
@@ -21,7 +19,7 @@ TFT_eSPI tft   = TFT_eSPI();
 XPT2046  touch(SPI, TOUCHSCREEN_CS_PIN, TOUCHSCREEN_IRQ_PIN);
 
 Page *pages[NUM_PAGES];
-int   currentPage = 0;
+int   currentPage = 2; // start on GIF page
 
 bool    touching    = false;
 int16_t touchStartX = 0;
@@ -112,31 +110,42 @@ void setup() {
     tft.setRotation(0);
     tft.setSwapBytes(true);
 
+    // ── Splash ───────────────────────────────────────────────────────────────
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+
+    // Logo: overlapping circles
+    tft.fillCircle(108, 112, 26, 0x2945);
+    tft.fillCircle(132, 112, 26, 0x4A0A);
+    tft.fillCircle(120, 96,  26, 0x0C4A);
+    tft.fillCircle(120, 112, 18, 0x2965);
+    // Eyes
+    tft.fillCircle(113, 107, 4, TFT_WHITE);
+    tft.fillCircle(127, 107, 4, TFT_WHITE);
+    tft.fillCircle(114, 108, 2, TFT_BLACK);
+    tft.fillCircle(128, 108, 2, TFT_BLACK);
+    // Mouth
+    tft.drawArc(120, 116, 7, 5, 200, 340, TFT_WHITE, TFT_BLACK);
+
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString("ProxiOshi", 120, 152);
+    tft.setTextSize(1);
+    tft.setTextColor(0x4208, TFT_BLACK);
+    tft.drawString("Booting up...", 120, 174);
+
     streetpass_init();
-    wifi_init(tft);
-    if (!wifi_is_ap_mode()) ota_check(tft);
 
     pages[0] = new AvatarPage(tft);
     pages[1] = new StreetPassPage(tft);
     pages[2] = new GifPage(tft);
     pages[3] = new SettingsPage(tft);
-    // First draw is deferred — the loop handles tap-to-dismiss the splash.
+    pages[currentPage]->draw();
 }
 
 // ── loop ──────────────────────────────────────────────────────────────────────
 
 void loop() {
-    // ── Splash dismiss ────────────────────────────────────────────────────────
-    static bool splashDismissed = false;
-    if (!splashDismissed) {
-        if (touch.pressed()) {
-            while (touch.pressed()) delay(10); // wait for finger up
-            splashDismissed = true;
-            pages[currentPage]->draw();
-        }
-        return;
-    }
-
     // ── Upload overlay + filesystem flush ─────────────────────────────────────
     static bool gifClosedForUpload = false;
     bool uploading = webserver_upload_in_progress();
