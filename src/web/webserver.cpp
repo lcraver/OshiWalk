@@ -17,7 +17,6 @@ static AsyncWebServer server(80);
 static File           s_sdUploadFile;
 static volatile bool  s_pendingRescan    = false;
 static volatile bool  s_uploadInProgress = false;
-static uint64_t       s_sdUsedBytes  = 0;
 static bool           s_sdMounted    = false;
 static bool           s_sdPresent    = false;
 
@@ -125,7 +124,7 @@ void webserver_init() {
         doc["sd_present"] = s_sdPresent;
         if (s_sdMounted) {
             doc["sd_total"] = SD_MMC.totalBytes();
-            doc["sd_used"]  = s_sdUsedBytes;
+            doc["sd_used"]  = SD_MMC.usedBytes();
         }
         String out;
         serializeJson(doc, out);
@@ -138,12 +137,10 @@ void webserver_init() {
         res->print('[');
         if (s_sdMounted) {
             bool first = true;
-            uint64_t tally = 0;
             File root = SD_MMC.open("/");
             File f    = root.openNextFile();
             while (f) {
                 if (!f.isDirectory()) {
-                    tally += f.size();
                     if (!first) res->print(',');
                     String name = f.name();
                     name.replace("\"", "\\\"");
@@ -153,7 +150,6 @@ void webserver_init() {
                 }
                 f = root.openNextFile();
             }
-            s_sdUsedBytes = tally;  // cache for /api/space
         }
         res->print(']');
         req->send(res);
