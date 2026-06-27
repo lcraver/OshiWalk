@@ -229,21 +229,74 @@ void loop() {
     }
 
     // ── Power button: long press → shut down ──────────────────────────────────
-    static unsigned long btnPressedAt = 0;
-    static bool          btnArmed     = false;
-    if (digitalRead(BUTTON2_PIN) == LOW) {
-        if (!btnArmed) { btnArmed = true; btnPressedAt = millis(); }
-        else if (millis() - btnPressedAt >= 2000) {
-            tft.fillScreen(TFT_BLACK);
-            tft.setTextDatum(MC_DATUM);
-            tft.setTextColor(TFT_WHITE, TFT_BLACK);
-            tft.setTextSize(2);
-            tft.drawString("Goodbye", 120, 155);
-            delay(600);
-            digitalWrite(PWR_ON_PIN, LOW);
+    // Wait for button release before arming, so a held boot-press doesn't
+    // immediately trigger shutdown.
+    static bool          btnReleased   = false;
+    static unsigned long btnPressedAt  = 0;
+    static bool          btnArmed      = false;
+    static bool          popupShown    = false;
+    static int           lastBarFill   = -1;
+
+    static const unsigned long HOLD_MS  = 2000;
+    static const int POP_W = 200, POP_H = 80;
+    static const int POP_X = (240 - POP_W) / 2, POP_Y = (320 - POP_H) / 2;
+    static const int BAR_X = POP_X + 10, BAR_Y = POP_Y + 52, BAR_W = POP_W - 20, BAR_H = 12;
+
+    bool btnDown = digitalRead(BUTTON2_PIN) == LOW;
+    if (!btnReleased) {
+        if (!btnDown) btnReleased = true;
+    } else if (btnDown) {
+        if (!btnArmed) {
+            btnArmed = true;
+            btnPressedAt = millis();
+            popupShown = false;
+            lastBarFill = -1;
+        } else {
+            unsigned long held = millis() - btnPressedAt;
+
+            // Draw popup on first frame of hold
+            if (!popupShown) {
+                tft.fillRoundRect(POP_X, POP_Y, POP_W, POP_H, 8, 0x1082);
+                tft.drawRoundRect(POP_X, POP_Y, POP_W, POP_H, 8, 0x4208);
+                tft.setTextDatum(MC_DATUM);
+                tft.setTextColor(TFT_WHITE, 0x1082);
+                tft.setTextSize(1);
+                tft.drawString("Hold to power off", 120, POP_Y + 22);
+                tft.drawRoundRect(BAR_X, BAR_Y, BAR_W, BAR_H, 3, 0x4208);
+                popupShown = true;
+                lastBarFill = 0;
+            }
+
+            // Update progress bar
+            int fill = (int)((long long)held * (BAR_W - 2) / HOLD_MS);
+            if (fill > BAR_W - 2) fill = BAR_W - 2;
+            if (fill != lastBarFill) {
+                tft.fillRoundRect(BAR_X + 1, BAR_Y + 1, fill, BAR_H - 2, 2, 0xF800);
+                lastBarFill = fill;
+            }
+
+            if (held >= HOLD_MS) {
+                tft.fillScreen(TFT_BLACK);
+                tft.setTextDatum(MC_DATUM);
+                tft.setTextColor(TFT_WHITE, TFT_BLACK);
+                tft.setTextSize(2);
+                tft.drawString("Goodbye", 120, 155);
+                delay(400);
+                // Cut power via hardware latch; deep sleep as fallback if latch
+                // doesn't drop immediately (e.g. still powered via USB).
+                digitalWrite(PWR_ON_PIN, LOW);
+                digitalWrite(PWR_EN_PIN, LOW);
+                esp_deep_sleep_start();
+            }
         }
     } else {
+        if (btnArmed && popupShown) {
+            // Released early — redraw the current page to clear the popup
+            pages[currentPage]->draw();
+        }
         btnArmed = false;
+        popupShown = false;
+        lastBarFill = -1;
     }
 
     // ── Touch handling ────────────────────────────────────────────────────────
