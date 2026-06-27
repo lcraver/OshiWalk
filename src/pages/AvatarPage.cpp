@@ -113,6 +113,14 @@ uint8_t AvatarPage::scanNumberedStyles(const char *folder, const char *prefix)
 AvatarPage::AvatarPage(TFT_eSPI &tft) : Page(tft, 0)
 {
     data_read_avatar(&cfg);
+    // Filesystem scan deferred to first Edit entry — see doScan()
+}
+
+// ── lazy filesystem scan ───────────────────────────────────────────────────────
+void AvatarPage::doScan()
+{
+    if (scanned) return;
+    scanned = true;
 
     for (int i = 0; i < (int)(sizeof(kBGBase)/sizeof(kBGBase[0])); i++)
         BGBaseCounts[i]  = scanParam("BG_Base",        kBGBase[i]);
@@ -167,13 +175,11 @@ AvatarPage::AvatarPage(TFT_eSPI &tft) : Page(tft, 0)
     // Clamp config values to detected maxima
     auto clamp = [](uint8_t &v, uint8_t maxV) { if (v >= maxV) v = 0; };
 
-    // Base params (no none option): clamp to array size
     clamp(cfg.bgBase,         (uint8_t)(sizeof(kBGBase)/sizeof(kBGBase[0])));
     clamp(cfg.bgBaseColor,    BGBaseCounts[cfg.bgBase] > 0 ? BGBaseCounts[cfg.bgBase] : 1);
     clamp(cfg.bodyShape,      (uint8_t)(sizeof(kBodyBase)/sizeof(kBodyBase[0])));
     clamp(cfg.bodyShapeColor, BodyBaseCount[cfg.bodyShape] > 0 ? BodyBaseCount[cfg.bodyShape] : 1);
 
-    // Optional params (0 = none): clamp to count + 1
     clamp(cfg.bgShape,      (uint8_t)(sizeof(kBGShape)/sizeof(kBGShape[0])) + 1);
     if (cfg.bgShape > 0)    clamp(cfg.bgShapeColor, BGShapeCounts[cfg.bgShape - 1] > 0 ? BGShapeCounts[cfg.bgShape - 1] : 1);
 
@@ -290,6 +296,21 @@ bool AvatarPage::paramHasNone(int i) const
     }
 }
 
+// Returns true for params that must always have a value (can't be set to None).
+static bool paramRequired(int i)
+{
+    switch (i) {
+        case P_BODY_CLOTH:
+        case P_FACE_SHAPE:
+        case P_EAR_STYLE:
+        case P_EYE_STYLE:
+        case P_NOSE_STYLE:
+            return true;
+        default:
+            return false;
+    }
+}
+
 uint8_t AvatarPage::getParamMax(int i) const
 {
     // For params with a none option, max = count + 1 (slot 0 is "none").
@@ -358,7 +379,55 @@ const char *AvatarPage::getParamLabel(int i) const
     }
 }
 
-// ── controls ──────────────────────────────────────────────────────────────────
+// ── view (default) ─────────────────────────────────────────────────────────────
+//
+//  Title bar       y =   0 .. 30
+//  Avatar          y =  40 .. 200  (160 × 160, centred)
+//  Subtitle        y = 212
+//  [Edit Avatar]   y = 248 .. 282
+
+static const int kViewAvSize = 160;
+static const int kViewAvX    = (240 - kViewAvSize) / 2;
+static const int kViewAvY    = 40;
+static const int kEditBtnY   = 248;
+
+void AvatarPage::drawView() const
+{
+    tft.fillScreen(TFT_BLACK);
+    drawTitleBar("My Avatar", kHdrClr);
+
+    avatar_render(tft, cfg, kViewAvX, kViewAvY, kViewAvSize, kViewAvSize);
+
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextSize(1);
+    tft.setTextColor(0x4208, TFT_BLACK);
+    tft.drawString("Broadcasting to nearby devices", 120, 212);
+
+    // Edit button
+    tft.fillRoundRect(20, kEditBtnY, 200, 34, 6, 0x2945);
+    tft.setTextColor(TFT_WHITE, 0x2945);
+    tft.setTextSize(1);
+    tft.drawString("Edit Avatar", 120, kEditBtnY + 17);
+
+    drawDotsAndVersion();
+}
+
+// ── editor ─────────────────────────────────────────────────────────────────────
+void AvatarPage::enterEdit()
+{
+    // Show a quick loading hint the first time since the scan takes a moment
+    if (!scanned) {
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(0x4208, TFT_BLACK);
+        tft.setTextSize(1);
+        tft.drawString("Loading editor...", 120, 160);
+        doScan();
+    }
+    mode = Mode::EDIT;
+    draw();
+}
+
 void AvatarPage::drawControl(const char *label, int row, uint8_t val, uint8_t maxVal, bool hasNone) const
 {
     const int y  = kCtrlY + kCtrlHdrH + row * kRowH;
@@ -394,11 +463,65 @@ void AvatarPage::drawControl(const char *label, int row, uint8_t val, uint8_t ma
     }
 }
 
-void AvatarPage::drawControls() const
-{
-    tft.fillRect(0, kCtrlY, 240, DOTS_BAR_Y - kCtrlY, TFT_BLACK);
+// Dice button: right of avatar, y=30..90 area
+static const int kDiceBtnX = 154;
+static const int kDiceBtnY = 48;
+static const int kDiceBtnW = 80;
+static const int kDiceBtnH = 26;
 
-    // Section header
+void AvatarPage::randomizeAvatar()
+{
+    // Set styles before their dependent color params so getParamMax is correct.
+    auto rnd = [&](int idx) {
+        uint8_t minV = paramRequired(idx) ? 1 : 0;
+        uint8_t maxV = getParamMax(idx);
+        setParam(idx, maxV > minV ? minV + random(maxV - minV) : minV);
+    };
+
+    rnd(P_BG_BASE);       rnd(P_BG_BASE_COLOR);
+    rnd(P_BG_SHAPE);      if (cfg.bgShape   > 0) rnd(P_BG_SHAPE_COLOR);
+    rnd(P_BODY_SHAPE);    rnd(P_BODY_COLOR);
+    rnd(P_BODY_CLOTH);    if (cfg.bodyClothing > 0) rnd(P_BODY_CLOTH_COLOR);
+    rnd(P_HAIR_STYLE);    if (cfg.hairStyle > 0) rnd(P_HAIR_COLOR);
+    rnd(P_BANGS_STYLE);
+    rnd(P_SKIN_COLOR);
+    rnd(P_FACE_SHAPE);
+    rnd(P_EAR_STYLE);
+    rnd(P_EYEBROW_STYLE); if (cfg.eyebrowStyle > 0) rnd(P_EYEBROW_COLOR);
+    rnd(P_EYE_STYLE);     if (cfg.eyeStyle > 0) rnd(P_EYE_COLOR);
+    rnd(P_NOSE_STYLE);
+    rnd(P_MOUTH_STYLE);   if (cfg.mouthStyle > 0) rnd(P_MOUTH_COLOR);
+    rnd(P_ACC_BODY_STYLE); if (cfg.accBodyStyle > 0) rnd(P_ACC_BODY_COLOR);
+    rnd(P_ACC_FACE_STYLE); if (cfg.accFaceStyle > 0) rnd(P_ACC_FACE_COLOR);
+
+    data_write_avatar(&cfg);
+}
+
+void AvatarPage::drawEditor() const
+{
+    tft.fillScreen(TFT_BLACK);
+
+    // Title bar with back arrow
+    tft.fillRect(0, 0, 240, 30, kHdrClr);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(TFT_WHITE, kHdrClr);
+    tft.setTextSize(1);
+    tft.drawString("< Back", 8, 15);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextSize(2);
+    tft.drawString("Edit Avatar", 130, 15);
+
+    avatar_render(tft, cfg, kAvX, kAvY, kAvW, kAvH);
+
+    // Dice roll button — to the right of the small avatar preview
+    tft.fillRoundRect(kDiceBtnX, kDiceBtnY, kDiceBtnW, kDiceBtnH, 5, 0x3186);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TFT_WHITE, 0x3186);
+    tft.setTextSize(1);
+    tft.drawString("Randomize", kDiceBtnX + kDiceBtnW / 2, kDiceBtnY + kDiceBtnH / 2);
+
+    // Controls panel
+    tft.fillRect(0, kCtrlY, 240, DOTS_BAR_Y - kCtrlY, TFT_BLACK);
     tft.drawLine(0, kCtrlY, 239, kCtrlY, 0x2104);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0xAD75, TFT_BLACK);
@@ -417,23 +540,51 @@ void AvatarPage::drawControls() const
     int end   = kPageEnd[ctrlPage];
     for (int i = start; i < end; i++)
         drawControl(getParamLabel(i), i - start, getParam(i), getParamMax(i), paramHasNone(i));
+
+    drawDotsAndVersion();
 }
 
 // ── Page interface ─────────────────────────────────────────────────────────────
 void AvatarPage::draw()
 {
-    tft.fillScreen(TFT_BLACK);
-    drawTitleBar("Avatar", kHdrClr);
-    avatar_render(tft, cfg, kAvX, kAvY, kAvW, kAvH);
-    drawControls();
-    drawDotsAndVersion();
+    if (mode == Mode::VIEW)
+        drawView();
+    else
+        drawEditor();
+}
+
+void AvatarPage::onLeave()
+{
+    mode = Mode::VIEW;
 }
 
 void AvatarPage::onTap(int16_t x, int16_t y)
 {
+    if (mode == Mode::VIEW) {
+        if (y >= kEditBtnY && y < kEditBtnY + 34)
+            enterEdit();
+        return;
+    }
+
+    // EDIT mode — back button (title bar)
+    if (y < 30) {
+        mode = Mode::VIEW;
+        drawView();
+        return;
+    }
+
+    // Tap avatar/button area (between title bar and controls)
     if (y < kCtrlY + kCtrlHdrH) {
+        // Dice button
+        if (x >= kDiceBtnX && x < kDiceBtnX + kDiceBtnW &&
+            y >= kDiceBtnY && y < kDiceBtnY + kDiceBtnH) {
+            randomizeAvatar();
+            drawEditor();
+            return;
+        }
+        // Tap elsewhere in avatar area → cycle control page
         ctrlPage = (ctrlPage + 1) % kNumCtrlPages;
-        drawControls();
+        drawEditor();
         return;
     }
 
@@ -444,14 +595,34 @@ void AvatarPage::onTap(int16_t x, int16_t y)
 
     uint8_t val    = getParam(paramIdx);
     uint8_t maxVal = getParamMax(paramIdx);
+    uint8_t minVal = paramRequired(paramIdx) ? 1 : 0;
 
     if (x < 120)
-        val = (val == 0) ? maxVal - 1 : val - 1;
+        val = (val <= minVal) ? maxVal - 1 : val - 1;
     else
-        val = (val + 1 >= maxVal) ? 0 : val + 1;
+        val = (val + 1 >= maxVal) ? minVal : val + 1;
 
     setParam(paramIdx, val);
     data_write_avatar(&cfg);
     avatar_render(tft, cfg, kAvX, kAvY, kAvW, kAvH);
-    drawControls();
+
+    // Redraw only the controls panel, not the whole screen
+    tft.fillRect(0, kCtrlY, 240, DOTS_BAR_Y - kCtrlY, TFT_BLACK);
+    tft.drawLine(0, kCtrlY, 239, kCtrlY, 0x2104);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(0xAD75, TFT_BLACK);
+    tft.setTextSize(1);
+    tft.drawString(kPageNames[ctrlPage], 110, kCtrlY + 7);
+    for (int p = 0; p < kNumCtrlPages; p++) {
+        int dx = 200 + p * 7;
+        if (p == ctrlPage)
+            tft.fillCircle(dx, kCtrlY + 7, 2, TFT_WHITE);
+        else
+            tft.drawCircle(dx, kCtrlY + 7, 2, 0x4208);
+    }
+    tft.drawLine(0, kCtrlY + kCtrlHdrH, 239, kCtrlY + kCtrlHdrH, 0x2104);
+    int start = kPageStart[ctrlPage];
+    int end   = kPageEnd[ctrlPage];
+    for (int i = start; i < end; i++)
+        drawControl(getParamLabel(i), i - start, getParam(i), getParamMax(i), paramHasNone(i));
 }
