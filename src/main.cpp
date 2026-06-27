@@ -81,13 +81,33 @@ void setup() {
     pinMode(PWR_ON_PIN, OUTPUT); digitalWrite(PWR_ON_PIN, HIGH);
     pinMode(BUTTON2_PIN, INPUT_PULLUP);
 
+    // ── Display first — user sees something immediately ───────────────────────
+    tft.begin();
+    tft.setRotation(0);
+    tft.setSwapBytes(true);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString("ProxiOshi", 120, 152);
+    tft.setTextSize(1);
+    tft.setTextColor(0x4208, TFT_BLACK);
+    tft.drawString("Booting... please wait", 120, 174);
+
+    // ── Slow init happens while splash is visible ─────────────────────────────
+    #define T(label) Serial.printf("[boot] %6lu ms  " label "\n", millis())
+
+    T("LittleFS start");
     if (!LittleFS.begin(true))
         Serial.println("LittleFS mount failed");
+    T("LittleFS done");
 
     data_init();
+    T("data_init done");
 
     // SD card — 1-bit SDMMC (CLK=12, CMD=11, D0=13)
     SD_MMC.setPins(SD_SCLK_PIN, SD_MOSI_PIN, SD_MISO_PIN);
+    T("SD start");
     bool sdMounted = SD_MMC.begin("/sdcard", true);
     // cardType() is unreliable for unformatted cards — the driver can fail before
     // setting the type even when a card is physically present.  If begin() failed,
@@ -96,6 +116,7 @@ void setup() {
     bool sdPresent = sdMounted || (SD_MMC.cardType() != CARD_NONE) || !sdMounted;
     if (!sdMounted) Serial.println("SD: begin() failed — showing format option");
     webserver_set_sd_state(sdMounted, sdPresent);
+    T("SD done");
 
     SPI.begin(TOUCHSCREEN_SCLK_PIN, TOUCHSCREEN_MISO_PIN, TOUCHSCREEN_MOSI_PIN);
     touch.begin(240, 320);
@@ -106,30 +127,25 @@ void setup() {
     else
         touch.setCal(1788, 285, 1877, 311, 240, 320);
     touch.setRotation(0);
+    T("touch done");
 
-    tft.begin();
-    tft.setRotation(0);
-    tft.setSwapBytes(true);
-
-    // ── Splash ───────────────────────────────────────────────────────────────
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-
-    // drawBootLogo(tft, 120, 104);
-
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("ProxiOshi", 120, 152);
-    tft.setTextSize(1);
-    tft.setTextColor(0x4208, TFT_BLACK);
-    tft.drawString("Booting... please wait", 120, 174);
-
+    T("streetpass start");
     streetpass_init();
+    T("streetpass done");
 
+    T("AvatarPage start");
     pages[0] = new AvatarPage(tft);
+    T("AvatarPage done");
     pages[1] = new StreetPassPage(tft);
+    T("StreetPassPage done");
+    T("GifPage start");
     pages[2] = new GifPage(tft);
+    T("GifPage done");
     pages[3] = new SettingsPage(tft);
+    T("all pages done — drawing");
+
+    #undef T
+
     pages[currentPage]->draw();
 }
 
